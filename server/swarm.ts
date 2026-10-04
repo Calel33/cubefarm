@@ -35,7 +35,7 @@ import { clampTrimIdleMin, DEFAULT_TRIM_IDLE_MIN, desksToTrim, formatBytes, free
 import { isCli } from './clis.ts';
 import { AgentTerminal } from './terminal.ts';
 import { Ticker } from './ticker.ts';
-import { DEFAULT_VOICE, speaks, Voice, voiceSettings } from './voice.ts';
+import { DEFAULT_LISTEN, DEFAULT_VOICE, listenSettings, speaks, Voice, voiceSettings } from './voice.ts';
 import { Notifier } from './notifier.ts';
 import { clip, plainText, stuckAgents } from './notify.ts';
 import { DEFAULT_NOTIFY, notifySettings, officeUrl } from '../shared/notify.ts';
@@ -429,6 +429,7 @@ export class Swarm {
       pacingSessions: DEFAULT_PACING_SESSIONS,
       trimIdleDesksMin: DEFAULT_TRIM_IDLE_MIN,
       voice: { ...DEFAULT_VOICE },
+      listen: { ...DEFAULT_LISTEN },
       notify: notifySettings(DEFAULT_NOTIFY, {}),
     },
     repos: [],
@@ -511,6 +512,7 @@ export class Swarm {
       secretsFile: path.join(HOME_DIR, backend.demo ? 'demo-secrets.json' : 'secrets.json'),
       cacheDir: path.join(HOME_DIR, backend.demo ? 'demo-voice' : 'voice'),
       settings: () => this.state.settings.voice,
+      listen: () => this.state.settings.listen,
       messages: () => this.state.messages,
       officeNote: (text) => this.postMessage('office', text),
       keyChanged: (view) => this.broadcast({ type: 'voiceKey', ...view }),
@@ -612,6 +614,7 @@ export class Swarm {
       }
       delete old.permissionMode; // the office's rules are instructions now, not a permission mode
       this.state.settings.voice = voiceSettings(DEFAULT_VOICE, loaded.settings?.voice);
+      this.state.settings.listen = listenSettings(DEFAULT_LISTEN, loaded.settings?.listen);
       this.state.settings.notify = notifySettings(DEFAULT_NOTIFY, loaded.settings?.notify);
       // Offices that were set up before the setup wizard existed skip it.
       if (loaded.settings && loaded.settings.setupDone === undefined && this.state.repos.length > 0) {
@@ -2901,6 +2904,7 @@ export class Swarm {
       s.voice = voiceSettings(s.voice, patch.voice);
       if (s.voice.keepDays !== keepDays) setTimeout(() => void this.voice.prune(), 500);
     }
+    if (patch.listen !== undefined) s.listen = listenSettings(s.listen, patch.listen);
     if (patch.notify !== undefined) {
       const url = (patch.notify as { officeUrl?: unknown } | null)?.officeUrl;
       if (url !== undefined && officeUrl(url) === null) throw new HttpError(400, 'The office URL must be an http(s) address, e.g. https://office.your-tailnet.ts.net');

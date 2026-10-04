@@ -167,6 +167,7 @@ export const useStore = create<State>((set, get) => ({
     pacingSessions: 3,
     trimIdleDesksMin: 120,
     voice: { provider: 'off', voiceId: '', voiceName: '', model: '', speakOffice: false, keepDays: 7 },
+    listen: { provider: 'off', autoSend: false, handsFree: false },
     notify: DEFAULT_NOTIFY,
   },
   clis: [],
