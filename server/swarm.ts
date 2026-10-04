@@ -33,6 +33,8 @@ import { clampPacingSessions, DEFAULT_PACING_SESSIONS, mayStart, PACING_MS, paci
 import { emptyHistory, loadHistory, opsView, recordChecks, recordCost, recordMerges, recordQa, type OpsFloorState, type OpsHistory } from './metrics.ts';
 import { clampTrimIdleMin, DEFAULT_TRIM_IDLE_MIN, desksToTrim, formatBytes, freedMessage, idleSince, TRIM_SWEEP_MS } from './deskTrim.ts';
 import { isCli } from './clis.ts';
+import { envSecrets, Journal } from './journal.ts';
+import { sampleDay, seeded } from './journalSample.ts';
 import { addTenure, apply as applyLedger, buy as buyDecor, emptyLedger, grant as grantCoins, loadLedger, place as placeDecor, progressView, type CommandResult, type Effects, type LedgerEvent, type LedgerState } from './ledger.ts';
 import { AgentTerminal } from './terminal.ts';
 import { Ticker } from './ticker.ts';
@@ -42,6 +44,7 @@ import { clip, plainText, stuckAgents } from './notify.ts';
 import { DEFAULT_NOTIFY, notifySettings, officeUrl } from '../shared/notify.ts';
 import { agentActivity, lineActivity, sameActivity, type SeenActivity } from '../shared/activity.ts';
 import { blockers, holdUps, issueSpecialty, waitsMessage } from '../shared/issues.ts';
+import { dayKey, journalFrame } from '../shared/journal.ts';
 import { cleanStyle, HAIR_COLORS, SKIN_TONES, type AgentStyle } from '../shared/looks.ts';
 import { achievementDef, type ProgressView } from '../shared/progress.ts';
 import { effectiveModel } from '../shared/models.ts';
@@ -57,6 +60,7 @@ import type {
   AgentView,
   CeoInfo,
   CliView,
+  ClientEvent,
   EffortLevel,
   HireRequestView,
   IssueInfo,
@@ -410,6 +414,16 @@ function parseReport(result: SessionResult): QaReport | null {
 }
 
 const cell = (s: string) => s.replace(/\|/g, '\\|').replace(/\r?\n/g, '<br>');
+
+/** A tab's message on /ws asking for the live office again (ClientEvent 'resync'). */
+function isResync(raw: unknown): boolean {
+  try {
+    return (JSON.parse(String(raw)) as Partial<ClientEvent> | null)?.type === 'resync';
+  } catch {
+    return false;
+  }
+}
+
 const ICON = { pass: '✅', fail: '❌', skip: '⏭️' } as const;
 
 export { HttpError };
@@ -509,6 +523,9 @@ export class Swarm {
   private clis: CliView[] = []; // coding-agent CLIs found on this machine (detected at startup)
   /** Phone messages read aloud. The demo keeps its own key and clips, so it never touches the real ones. */
   readonly voice: Voice;
+  /** What the office looked like over the last week, for the time-lapse replay. The demo keeps its own. */
+  readonly journal: Journal;
+  private readonly envSecrets = envSecrets(process.env);
   /** Notifications to the manager's devices and chat apps (docs/pocket.md). The demo's only log what they'd send. */
   readonly notifier: Notifier;
   private toldStuck = new Set<string>(); // `${agentId}:${endedAt}`: agents in an error the manager was notified about
@@ -525,6 +542,11 @@ export class Swarm {
       keyChanged: (view) => this.broadcast({ type: 'voiceKey', ...view }),
       cacheChanged: (voiceCache) => this.broadcast({ type: 'voiceCache', voiceCache }),
       log: (line) => console.log(line),
+    });
+    this.journal = new Journal({
+      dir: path.join(HOME_DIR, backend.demo ? 'demo-journal' : 'journal'),
+      frame: () => journalFrame(this.snapshot(), this.secrets()),
+      secrets: () => this.secrets(),
     });
     this.notifier = new Notifier({
       transport: backend.notify,
@@ -721,6 +743,7 @@ export class Swarm {
     setInterval(() => {
       void this.trimIdleDesks();
       void this.voice.prune();
+      void this.journal.prune().catch((err) => console.warn('could not prune the journal', err));
     }, this.backend.demo ? 60_000 : TRIM_SWEEP_MS);
     setInterval(() => this.state.repos.forEach((r, i) => setTimeout(() => void this.sweepFloor(r.id), i * 1500)), DESK_SWEEP_INTERVAL_MS);
     setInterval(() => this.emitOps(), OPS_TICK_MS); // the clock moves the numbers too: the last hour, today, errors turning into alarms
@@ -732,6 +755,9 @@ export class Swarm {
         this.broadcast({ type: 'clis', clis });
       })
       .catch((err) => console.warn('could not look for agent CLIs', err));
+    await this.journal.start();
+    // A fresh demo office has yesterday to replay too.
+    if (this.backend.demo) void this.journal.hasPastDays().then((has) => (has ? undefined : this.journalSample())).catch((err) => console.warn('could not write the sample day', err));
     this.save();
     setTimeout(() => this.schedule(), 1000);
   }
@@ -919,6 +945,10 @@ export class Swarm {
   addClient(ws: WebSocket) {
     this.clients.add(ws);
     ws.on('close', () => this.clients.delete(ws));
+    // A tab back from the time-lapse asks for the live office again.
+    ws.on('message', (raw) => {
+      if (isResync(raw)) this.send(ws, { type: 'snapshot', data: this.snapshot() });
+    });
     this.send(ws, { type: 'snapshot', data: this.snapshot() });
   }
 
@@ -931,6 +961,22 @@ export class Swarm {
     for (const ws of this.clients) if (ws.readyState === ws.OPEN) ws.send(msg);
     for (const item of this.ticker.observe(ev)) this.broadcast({ type: 'ticker', item });
     if (OPS_EVENTS.has(ev.type)) this.opsSoon();
+    this.journal.record(ev);
+  }
+
+  /** Values the journal must never write: the ElevenLabs key and secret-looking environment variables. */
+  private secrets(): string[] {
+    const key = this.voice.secret();
+    return key ? [...this.envSecrets, key] : this.envSecrets;
+  }
+
+  /** POST /api/journal/sample (demo only): writes a made-up working day as yesterday's journal, to replay. */
+  async journalSample(): Promise<{ day: string }> {
+    if (!this.backend.demo) throw new HttpError(400, 'Sample days are only for the demo office');
+    const today = new Date();
+    const midnight = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 1).getTime();
+    const day = await this.journal.writeDay(sampleDay(journalFrame(this.snapshot(), this.secrets()), midnight, seeded(Number(dayKey(midnight).replace(/-/g, '')))));
+    return { day };
   }
 
   private toast(level: 'info' | 'success' | 'error', text: string) {
@@ -1442,6 +1488,7 @@ export class Swarm {
    */
   async shutdown(restart = false): Promise<void> {
     await this.writeState().catch((err) => console.warn('could not save the state', err));
+    await this.journal.close().catch((err) => console.warn('could not write the journal', err));
     await this.backend.releaseClis(restart); // before the terminals are saved: whatever they print next waits in the keeper
     await this.saveTerminals(true);
     await this.previews.stopAll(this.state.repos);

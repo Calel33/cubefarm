@@ -1,9 +1,15 @@
 import { useStore } from './store';
 import type { AgentStyle } from '../../shared/looks';
 import type { AgentCli, AgentPromptView, GhRepoSummary, NotifyChannel, NotifyChannelsView, NotifyWebhook, OfficeUpdateView, PreviewView, ProjectFolderView, PrPreviewView, RepoView, SwarmSettings, UsageView, VoiceCacheView, VoiceOption } from '../../shared/types';
+import type { JournalChunk, JournalDayView } from '../../shared/journal';
 import type { DecorItem, ProgressView } from '../../shared/progress';
 
 async function call<T = unknown>(method: string, url: string, body?: unknown, toast = true): Promise<T> {
+  // The time-lapse shows a recorded day: nothing in it can be acted on.
+  if (method !== 'GET' && useStore.getState().replaying) {
+    useStore.getState().pushToast('info', '▶ Replaying: live actions are off. Press Esc to go back to the live office.');
+    throw new Error('The time-lapse is playing');
+  }
   const res = await fetch(url, {
     method,
     headers: body !== undefined ? { 'Content-Type': 'application/json' } : undefined,
@@ -116,6 +122,9 @@ export const api = {
   voices: () => call<VoiceOption[]>('GET', '/api/voice/voices'),
   voiceSample: (voiceId: string) => clip(`/api/voice/sample?voiceId=${encodeURIComponent(voiceId)}`),
   clearVoiceCache: () => call<VoiceCacheView>('DELETE', '/api/voice/cache'),
+  journalDays: () => call<JournalDayView[]>('GET', '/api/journal/days'),
+  journalEvents: (from: number, to: number, seek: boolean) => call<JournalChunk>('GET', `/api/journal/events?from=${Math.floor(from)}&to=${Math.ceil(to)}${seek ? '&seek=1' : ''}`),
+  journalSample: () => call<{ day: string }>('POST', '/api/journal/sample'),
   /** Saves (or with empty fields removes) a chat app's webhook. No toast: the settings show why it was refused. */
   setWebhook: (channel: NotifyWebhook, body: Record<string, string>) => call<NotifyChannelsView>('PUT', `/api/notify/webhooks/${channel}`, body, false),
   testNotify: (channel: NotifyChannel) => call<{ ok: true; sent: number }>('POST', '/api/notify/test', { channel }, false),

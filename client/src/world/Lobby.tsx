@@ -18,6 +18,7 @@ import { WallSign } from './OfficeFloor';
 import { Bookshelf, CoffeeCorner, Couch, CoffeeTable, GlassWall, Plant, Rug, WallClock } from './Props';
 import { LobbyRituals } from './Rituals';
 import { Shell } from './Shell';
+import { TimeLapseScreen } from './TimeLapseScreen';
 import { Ball, Box, Cyl } from './Toon';
 import { Toys } from './toys';
 
@@ -368,6 +369,7 @@ export function Lobby() {
       <Elevator floorLabel="▲ G · Lobby" accent={ACCENT} />
       <Toys floor="lobby" />
       <Directory />
+      <TimeLapseScreen />
       <TrophyCabinet />
       <Kiosk />
       <TrophyShelf />

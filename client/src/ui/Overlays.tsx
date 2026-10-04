@@ -211,6 +211,11 @@ function Help() {
         <p>
           The curved bank of screens behind reception shows the whole company at a glance: the pipeline (issues ready, being built, in QA, being fixed, ready to merge, needing you), merges today and over the last 24 hours, lead time, QA wait and CI, who's busy, and an estimate of today's cost. Each floor's team sign has a short line of its own numbers. The bottom middle screen is Claude's usage meter: while the office paces itself after a usage warning, press <kbd>E</kbd> on it to resume full speed (if you've topped up or your usage was reset). When a PR needs you, or someone has been stuck on an error for 10 minutes, the beacon on top spins (and the one on that floor's sign) with a calm chime: press <kbd>E</kbd> on it to open the console at that card. The manager's console has it all too, under Mission control.
         </p>
+        <h3>Time-lapse</h3>
+        <p>
+          Missed the day? The manager's console → 📼 Time-lapse (or the screen by the lobby's hoop) replays it right here in the office at up to 600× speed, or just what happened while you were away. Merges still bang the gong.
+          While it plays, <kbd>Esc</kbd> frees the mouse and <kbd>Esc</kbd> again goes back to the live office.
+        </p>
         <h3>Your phone</h3>
         <p>
           Press <kbd>P</kbd> anywhere to pull out your phone. Text the CEO, approve or decline the people they want to hire, see every project at a glance, or play Cubetris, Cable Snake or look after your Desk Pet while the team works. The red badge counts decisions and messages waiting for you. In the chat, and in an agent's

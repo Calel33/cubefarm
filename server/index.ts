@@ -11,6 +11,7 @@ import { DEMO, PORT, STATE_FILE, VERSION, WORKSPACE_ROOT } from './config.ts';
 import { realBackend } from './backend.ts';
 import { handleHook, handleMcp, setOfficeUrl } from './cliRunner.ts';
 import { createDemoBackend } from './demo.ts';
+import { parseRange } from './journal.ts';
 import { underLauncher } from './officeUpdate.ts';
 import { serviceWorkerSource, swVersion } from './pwa.ts';
 import { screenStatus } from './screenReply.ts';
@@ -243,6 +244,17 @@ app.post('/api/office/update', route((req) => swarm.updateOffice(req.body?.actio
 // Claude's usage: resume full speed after a usage warning; in the demo, a warning or the limit on demand
 app.post('/api/usage/resume', route(() => swarm.resumeFullSpeed()));
 app.post('/api/usage/simulate', route((req) => swarm.simulateUsage(req.body?.kind)));
+
+// The journal, for the time-lapse replay (read-only); the demo can write itself a sample day.
+app.get('/api/journal/days', route(() => swarm.journal.days()));
+app.get(
+  '/api/journal/events',
+  route((req) => {
+    const { from, to, seek } = parseRange(req.query, Date.now());
+    return swarm.journal.read(from, to, seek);
+  }),
+);
+app.post('/api/journal/sample', route(() => swarm.journalSample()));
 
 // The CEO and the manager's phone
 app.post('/api/ceo/message', route((req) => swarm.messageCeo(str(req.body.text))));
