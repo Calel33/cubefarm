@@ -48,8 +48,8 @@ It ships on npm as `cubefarm` (`npx cubefarm`); it used to be called Office Swar
 CI (`.github/workflows/ci.yml`): Node 24 on `ubuntu-latest` and `windows-latest`, `npm ci` → `typecheck` → `test` →
 `build` → package smoke test, for every PR and push to `main`, with a throwaway `SWARM_HOME` and `SWARM_PORT=0`; a separate `e2e`
 job on `ubuntu-latest` runs `npm run test:e2e`. All three must pass locally
-before you open a PR. `.github/workflows/release.yml` publishes to npm when the manager pushes a `v*` tag (npm trusted
-publishing, tied to that file name); never publish or tag releases yourself.
+before you open a PR. `.github/workflows/release.yml` publishes to npm when the manager runs it from GitHub's Actions tab or pushes a
+`v*` tag (npm trusted publishing, tied to that file name); never publish or tag releases yourself.
 
 ## Code map
 

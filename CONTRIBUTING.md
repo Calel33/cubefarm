@@ -62,13 +62,15 @@ The server streams everything to the browser over one websocket (`/ws`); an open
 
 The npm package holds `bin/cubefarm.js` (the command), `dist/` (the built client) and `dist-server/` (the server, bundled into plain JavaScript by `scripts/build-server.mjs`, because Node won't run TypeScript from inside `node_modules`). The client's libraries are bundled into `dist/`, so users only install the server's dependencies.
 
-Releases are published by GitHub Actions, not from a laptop:
+Releases are published by GitHub Actions (`.github/workflows/release.yml`), not from a laptop. Once `main` has what you want to ship and its CI is green: on GitHub, open **Actions → Release → Run workflow**, pick `patch`, `minor` or `major` and run it. The workflow bumps `package.json`, runs the tests, the build and the package smoke test, pushes a `Release x.y.z` commit and its `vx.y.z` tag to `main`, publishes to npm and creates a GitHub release whose notes list the PRs merged since the last one.
+
+It publishes with [trusted publishing](https://docs.npmjs.com/trusted-publishers): npm trusts that workflow file in this repo, so there is no npm token to store or renew, and every version gets a provenance statement. If anything fails before the push, nothing was released: fix it and run the workflow again (the same goes for a PR merged while it ran). If the publish itself fails after the push, that version number is used up on GitHub only, and the next run releases the one after it.
+
+Pushing a tag from a laptop still works and runs the same workflow:
 
 ```bash
 npm version patch -m "Release %s"   # or minor / major: bumps package.json, commits and tags v<version>
-git push --follow-tags              # the v* tag starts .github/workflows/release.yml
+git push --follow-tags              # the v* tag starts the release workflow
 ```
-
-The release workflow checks the tag matches `package.json`, runs the tests, the build and the package smoke test, then publishes with [trusted publishing](https://docs.npmjs.com/trusted-publishers): npm trusts that workflow file in this repo, so there is no npm token to store or renew, and every version gets a provenance statement. If the publish step fails, fix the cause and re-run the job; the tag stays the same.
 
 `npm pack --dry-run` lists exactly what would be published, and `node scripts/smoke-package.mjs` (after `npm run build`) installs the package into an empty folder and boots it in demo mode, like CI does.
