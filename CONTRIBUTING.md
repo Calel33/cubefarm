@@ -62,10 +62,13 @@ The server streams everything to the browser over one websocket (`/ws`); an open
 
 The npm package holds `bin/cubefarm.js` (the command), `dist/` (the built client) and `dist-server/` (the server, bundled into plain JavaScript by `scripts/build-server.mjs`, because Node won't run TypeScript from inside `node_modules`). The client's libraries are bundled into `dist/`, so users only install the server's dependencies.
 
+Releases are published by GitHub Actions, not from a laptop:
+
 ```bash
-npm version patch   # or minor / major: bumps package.json and tags the commit
-npm publish         # runs the tests and the build first (prepublishOnly)
-git push --follow-tags
+npm version patch -m "Release %s"   # or minor / major: bumps package.json, commits and tags v<version>
+git push --follow-tags              # the v* tag starts .github/workflows/release.yml
 ```
+
+The release workflow checks the tag matches `package.json`, runs the tests, the build and the package smoke test, then publishes with [trusted publishing](https://docs.npmjs.com/trusted-publishers): npm trusts that workflow file in this repo, so there is no npm token to store or renew, and every version gets a provenance statement. If the publish step fails, fix the cause and re-run the job; the tag stays the same.
 
 `npm pack --dry-run` lists exactly what would be published, and `node scripts/smoke-package.mjs` (after `npm run build`) installs the package into an empty folder and boots it in demo mode, like CI does.

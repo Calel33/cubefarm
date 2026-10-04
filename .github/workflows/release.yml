@@ -1,0 +1,45 @@
+name: Release
+
+# Publishes the npm package when a version tag is pushed (`npm version patch` + `git push --follow-tags`).
+# npm trusts this workflow file (trusted publishing), so the repo holds no npm token. Renaming this file breaks
+# publishing until the package's trusted publisher on npmjs.com is updated to match.
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+  id-token: write # trusted publishing: npm swaps the run's OIDC token for a one-time publish token
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      # Never let anything in CI look at a real office's state or ports.
+      SWARM_HOME: ${{ github.workspace }}/.ci-swarm-home
+      SWARM_PORT: '0'
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+          # No dependency cache in a job that can publish.
+          package-manager-cache: false
+
+      - name: Check the tag matches package.json
+        run: |
+          expected="v$(node -p "require('./package.json').version")"
+          if [ "$GITHUB_REF_NAME" != "$expected" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match package.json version ($expected)"
+            exit 1
+          fi
+
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
+      - run: node scripts/smoke-package.mjs
+      # Tests and build already ran above, so skip prepublishOnly: what gets published is what was smoke-tested.
+      - run: npm publish --ignore-scripts
