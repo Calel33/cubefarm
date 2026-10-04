@@ -151,6 +151,7 @@ export const useStore = create<State>((set, get) => ({
     setupDone: true,
     tutorialStep: -1,
     pacingSessions: 3,
+    trimIdleDesksMin: 120,
     voice: { provider: 'off', voiceId: '', voiceName: '', model: '', speakOffice: false },
   },
   clis: [],
