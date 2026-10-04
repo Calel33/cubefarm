@@ -145,6 +145,20 @@ export function KanbanView({ repoId, embedded }: { repoId: string; embedded?: bo
     });
     if (ok) void act(c.key, () => api.sendBack(repo.id, c.number, note.trim() || undefined));
   };
+  const closePr = async (c: KanbanCard) => {
+    const ok = await confirmDialog({
+      tone: 'danger',
+      title: `Close PR #${c.number}?`,
+      body: `“${c.title}” will be closed without merging, and any QA or fix work on it stops. Its issue stays open and waits for you to assign it again. The branch stays on GitHub.`,
+      confirm: 'Close PR',
+    });
+    if (ok) void act(c.key, () => api.closePull(repo.id, c.number));
+  };
+  const closeButton = (c: KanbanCard) => (
+    <button className="btn btn-small btn-ghost" disabled={pending === c.key} onClick={() => void closePr(c)}>
+      Close
+    </button>
+  );
   const previewButton = (c: KanbanCard) => (
     <button
       className="btn btn-small"
@@ -296,6 +310,7 @@ export function KanbanView({ repoId, embedded }: { repoId: string; embedded?: bo
                     Merge anyway
                   </button>
                 )}
+                {closeButton(c)}
               </div>
             );
           },
@@ -320,16 +335,7 @@ export function KanbanView({ repoId, embedded }: { repoId: string; embedded?: bo
                 <button className="btn btn-small btn-good" disabled={pending === c.key || pr?.isDraft} onClick={() => merge(c)}>
                   Merge
                 </button>
-                <button
-                  className="btn btn-small btn-ghost"
-                  disabled={pending === c.key}
-                  onClick={async () => {
-                    const ok = await confirmDialog({ tone: 'danger', title: `Close PR #${c.number}?`, body: `“${c.title}” will be closed without merging. The branch stays on GitHub.`, confirm: 'Close PR' });
-                    if (ok) void act(c.key, () => api.closePull(repo.id, c.number));
-                  }}
-                >
-                  Close
-                </button>
+                {closeButton(c)}
               </div>
             );
           },
