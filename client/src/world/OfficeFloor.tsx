@@ -5,6 +5,7 @@ import { AppMonitor } from './AppMonitor';
 import { Desk } from './Desk';
 import { drawSign } from './draw';
 import { Elevator } from './Elevator';
+import { ErrandDirector } from './ErrandDirector';
 import { Gong } from './Gong';
 import { useCanvasTexture } from './interact';
 import { KanbanBoard } from './KanbanBoard';
@@ -87,6 +88,7 @@ export function OfficeFloor({ repo }: { repo: RepoView }) {
       <Gong repoId={repo.id} />
       <Elevator floorLabel={`▲ ${repo.floor} · ${name}`} accent={repo.color} />
       <Toys floor="office" />
+      <ErrandDirector floor="office" agents={agents} />
 
       <WallSign
         position={[-4.6, 1.95, HALF_D - 0.03]}

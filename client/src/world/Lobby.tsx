@@ -7,6 +7,7 @@ import { Character } from './Character';
 import { Desk } from './Desk';
 import { drawCandidateTag, drawSign, roundRect, SANS } from './draw';
 import { Elevator } from './Elevator';
+import { ErrandDirector } from './ErrandDirector';
 import { useCanvasTexture, useInteractable } from './interact';
 import { Jukebox } from './Jukebox';
 import { CEO_DESK, CEO_ROOM, COFFEE_CORNER, HALF_D, HALF_W, JUKEBOX, LOBBY_RUG, MANAGER_DESK, MANAGER_ROOM, RECEPTION, WAITING, WAITING_ROTATION } from './layout';
@@ -252,8 +253,10 @@ function CeoBoard() {
 function CeoOffice() {
   const c = CEO_ROOM;
   const ceo = useStore((s) => s.agents[CEO_ID]);
+  const people = useMemo(() => (ceo ? [ceo] : []), [ceo]);
   return (
     <group>
+      <ErrandDirector floor="lobby" agents={people} />
       <Rug position={[(c.minX + c.maxX) / 2, 0.005, (c.minZ + c.maxZ) / 2]} size={[c.maxX - c.minX, c.maxZ - c.minZ]} color="#e6dcff" />
       <GlassWall from={[c.minX, c.minZ]} to={[c.minX, c.maxZ]} />
       <GlassWall from={[c.minX, c.maxZ]} to={[c.doorMinX, c.maxZ]} />
