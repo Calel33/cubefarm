@@ -27,6 +27,8 @@ export type Overlay =
   | { kind: 'elevator' }
   | { kind: 'manager'; tab?: ManagerTab; repoId?: string; card?: string } // card: an OpsAlarm id, or 'usage', to open at
   | { kind: 'phone'; tab?: PhoneTab; requestId?: string }
+  /** A proposal face to face: a candidate's interview in the lobby, or the CEO's let-go note on a desk. */
+  | { kind: 'interview'; requestId: string }
   | { kind: 'help' }
   | { kind: 'catalogue'; repoId?: string } // the lobby kiosk (#210)
   | { kind: 'decor-box'; repoId: string }; // a floor's decor box
