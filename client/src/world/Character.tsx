@@ -7,12 +7,14 @@ import { ACCENTS, appearanceFor } from './appearance';
 import { WALK_SPEED, gait, newBodyState, smooth, stepBody, type BodyTarget, type Gait, type Gesture } from './body';
 import { PARTS } from './characterParts';
 import { fidgetProgress, fidgetWeight, newDeskLife, play, stepDeskLife, wake, type Fidget, type Mood } from './fidgets';
+import { malletHolder } from './gongRunner';
 import { isCelebrating } from './gongState';
 import { mix, shade, toon } from './materials';
 import { bodyTarget, handMug, seatBody, setBody, subscribeMugs, trackBody } from './people';
 import { takeReaction, trackLife } from './reactionFeed';
 import { SpeechBubble } from './SpeechBubble';
 import { MugLook, mugColor } from './toys/mugLook';
+import { Ball, Cyl } from './Toon';
 import { TAP_PHASE, burstLevel, handLift, mouseDip, poseFor, tapSpeed, typingSeed, type PoseName } from './typing';
 import { useHitReaction } from './useHitReaction';
 import { Zzz } from './Zzz';
@@ -73,6 +75,11 @@ const GESTURES: Record<Gesture, { l: Arm | null; r: Arm | null; head: number }> 
   cheer: { l: POSES.cheer.l, r: POSES.cheer.r, head: POSES.cheer.headPitch }, // the seated cheer's arms up in a V
   wave: { l: null, r: { pitch: 1.25, yaw: -0.3 }, head: 0.1 }, // a hand up beside the head, waving (below)
   talk: { l: null, r: { pitch: -0.3, yaw: 0.45 }, head: 0.05 }, // a hand out in front, moving as they talk
+  // the gong (gongRunner.ts): a hand out for the mallet on its hook, raised back over the shoulder, then brought down
+  // onto the disc (then the cheer above)
+  take: { l: null, r: { pitch: 0.75, yaw: -0.3 }, head: 0.1 },
+  windup: { l: { pitch: 0.2, yaw: 0.3 }, r: { pitch: 2.1, yaw: 0.05 }, head: 0.1 },
+  strike: { l: { pitch: -0.6, yaw: 0.2 }, r: { pitch: -0.25, yaw: 0.25 }, head: 0 },
 };
 // A merge party on their floor (gongState.ts) beats any gesture: arms up in a V, standing or walking, mug or not.
 const PARTY_ARMS = { l: POSES.cheer.l, r: POSES.cheer.r, head: POSES.cheer.headPitch };
@@ -219,6 +226,7 @@ export function Character({
   const kneeL = useRef<THREE.Group>(null);
   const kneeR = useRef<THREE.Group>(null);
   const tag = useRef<THREE.Group>(null);
+  const mallet = useRef<THREE.Group>(null);
   const bubbleLift = useRef<THREE.Group>(null);
   const held = useRef<THREE.Group>(null);
   const chairZ = useRef<number | null>(null);
@@ -303,7 +311,9 @@ export function Character({
         b.rotation.y = st.heading - st.seatHeading;
       }
       const gesture = st.stage === 'up' ? (goal?.gesture ?? 'none') : 'none';
-      const g = party ? PARTY_ARMS : GESTURES[gesture];
+      const holding = st.stage === 'up' && malletHolder() === agent.id;
+      // the one with the mallet plays out their own strike and pose (gongRunner.ts); the party is for everyone else
+      const g = party && !holding ? PARTY_ARMS : GESTURES[gesture];
       const kg = 1 - Math.exp(-dt * 6);
       if (g.l) Object.assign(move.l, g.l);
       if (g.r) Object.assign(move.r, g.r);
@@ -317,6 +327,7 @@ export function Character({
       move.gr += ((g.r ? 1 : 0) - move.gr) * kg;
       move.gh += (g.head - move.gh) * kg;
       hearBody(agent.id, st, st.stage === 'up' ? (goal?.gesture ?? 'none') : 'none', dt, te[13]);
+      if (mallet.current) mallet.current.visible = holding;
     }
     const seated = st.stage === 'seated';
     const k = smooth(st.sit); // 1 seated, 0 standing
@@ -612,6 +623,12 @@ export function Character({
                       </group>
                     </group>
                   )}
+                  {/* the gong's mallet, in the right hand while they have it (gongRunner.ts); the handle tips up from the fist */}
+                  <group ref={mallet} position={[0, 0, -0.5]} rotation={[0.5, 0, 0]} visible={false}>
+                    <Cyl r={0.025} h={0.55} position={[0, 0, -0.27]} rotation={[Math.PI / 2, 0, 0]} color="#f1d19b" shadow={false} />
+                    <Ball r={0.12} position={[0, 0, -0.56]} color="#e76f51" outline shadow={false} />
+                    <Cyl r={0.125} h={0.05} position={[0, 0, -0.56]} rotation={[Math.PI / 2, 0, 0]} color="#f4a261" shadow={false} />
+                  </group>
                 </>
               )}
             </group>

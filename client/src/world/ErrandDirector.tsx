@@ -36,7 +36,7 @@ import {
   type Queued,
 } from './errands';
 import { HALF_D } from './layout';
-import { bodyState, bodyTarget, placeBody, say, seatBody, setBody, setErrand, takeAsk, trackDirector } from './people';
+import { bodyState, bodyTarget, isSeated, onClaim, placeBody, say, seatBody, setBody, setErrand, takeAsk, trackDirector } from './people';
 import { ARRIVE, CABIN, CHAT, CHAT_VENUES, DOORS_SECONDS, LEAVE, arrivalPath, exitPath, floorNews, headingTo, huddle, nearest, pickTopic, planChat } from './socials';
 import { countPoke, npcRoomba } from './toys/npc';
 import { pokeToy } from './toys/poke';
@@ -297,6 +297,26 @@ export function ErrandDirector({
     p.actor = null;
     report(p);
   };
+
+  // Something that beats an errand (the gong run) has them now: drop it on the spot, a mug in hand included, and leave
+  // their body alone until they're back in their chair.
+  useEffect(
+    () =>
+      onClaim((id) => {
+        const p = people.get(id);
+        if (!p || p.phase === 'seated') return;
+        p.actor?.abort();
+        p.actor?.end(false);
+        p.actor = null;
+        p.walking = null;
+        p.errand?.end?.(p.id, 'cut');
+        endScript(p); // a toy in hand is dropped
+        p.poke = 0;
+        sitDown(p);
+      }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- sitDown only touches people and run
+    [people, run],
+  );
 
   /**
    * Sets off from the desk, or from `from` when already up (turned round on the way somewhere else). False when there's
@@ -710,7 +730,7 @@ export function ErrandDirector({
         if (e && start(p, e, st, { a, state }) && idle) was?.end?.(p.id, 'cut');
         continue;
       }
-      if (bodyTarget(p.id)) continue; // someone's walking them by hand (__swarmPeople)
+      if (!isSeated(p.id)) continue; // walked by hand (__swarmPeople) or by the gong run, or not back in their chair yet
       states.set(p.id, state);
       const ask = takeAsk(p.id);
       // every work errand wanted, then one idle errand picked by weight
