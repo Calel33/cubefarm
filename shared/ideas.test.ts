@@ -74,10 +74,10 @@ describe('shipping', () => {
 
 describe('where the manager was', () => {
   it('says what they looked at, or where they stood', () => {
-    expect(whereText(2, 'the whiteboard', 'the QA lab')).toBe('looking at the whiteboard on floor 2');
+    expect(whereText(2, 'the whiteboard', 'in the QA lab')).toBe('looking at the whiteboard on floor 2');
     expect(whereText(0, 'the jukebox', null)).toBe('in the lobby, looking at the jukebox');
-    expect(whereText(3, null, 'the QA lab')).toBe('in the QA lab on floor 3');
-    expect(whereText(0, null, "the CEO's office")).toBe("in the lobby, in the CEO's office");
+    expect(whereText(3, null, 'by the whiteboard')).toBe('by the whiteboard on floor 3');
+    expect(whereText(0, null, "in the CEO's office")).toBe("in the lobby, in the CEO's office");
     expect(whereText(-1, null, null)).toBe('on the roof');
     expect(whereText(4, null, null)).toBe('on floor 4');
   });

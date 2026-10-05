@@ -302,7 +302,7 @@ export function Player({ colliders, floor }: { colliders: Rect[]; floor: number 
       for (const action of actionsForKey(b, e.code, SCOPES[mode])) {
         if (MOVES.has(action) && mode === 'follow' && !e.repeat) leaveView(); // any movement key takes over again
         if (action === 'interact' && !e.repeat) {
-          if (s.focus?.action.kind === 'phone') e.preventDefault(); // don't type the key into the phone's message box
+          if (s.focus?.action.kind === 'phone' || s.focus?.action.kind === 'ideaPin') e.preventDefault(); // don't type the key into the panel's message box
           interact();
         }
         // − and + turn the jukebox down and up while you look at it.

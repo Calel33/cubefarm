@@ -36,11 +36,11 @@ describe('idea wall cards', () => {
 
 describe('where the manager stands', () => {
   it('names the lobby rooms and the office areas', () => {
-    expect(areaAt(0, MANAGER_DESK.x, MANAGER_DESK.z + 1)).toBe("the manager's office");
-    expect(areaAt(0, CEO_DESK.x, CEO_DESK.z + 1.5)).toBe("the CEO's office");
-    expect(areaAt(2, QA_LAB.x - 0.5, -2)).toBe('the QA lab');
-    expect(areaAt(2, 0, -10.5)).toBe('the whiteboard');
-    expect(areaAt(2, -3.5, -1)).toBe('the desks');
+    expect(areaAt(0, MANAGER_DESK.x, MANAGER_DESK.z + 1)).toBe("in the manager's office");
+    expect(areaAt(0, CEO_DESK.x, CEO_DESK.z + 1.5)).toBe("in the CEO's office");
+    expect(areaAt(2, QA_LAB.x - 0.5, -2)).toBe('in the QA lab');
+    expect(areaAt(2, 0, -10.5)).toBe('by the whiteboard');
+    expect(areaAt(2, -3.5, -1)).toBe('among the desks');
     expect(areaAt(ROOF, 0, 0)).toBeNull();
   });
 });

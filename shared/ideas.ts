@@ -118,13 +118,13 @@ export const floorName = (floor: number) => (floor === 0 ? 'the lobby' : floor <
 
 /**
  * The "where" line on an idea: what the manager was looking at and where they stood. `looking`: a noun phrase ("the
- * whiteboard"), `area`: a named part of the floor ("the QA lab"); either may be null.
+ * whiteboard"), `area`: where on the floor, with its preposition ("in the QA lab"); either may be null.
  */
 export function whereText(floor: number, looking: string | null, area: string | null): string {
   const on = floorName(floor);
   const at = floor === 0 ? 'in the lobby' : `on ${on}`;
   if (looking) return floor > 0 ? `looking at ${looking} on ${on}` : `${at}, looking at ${looking}`;
-  if (area) return floor > 0 ? `in ${area} on ${on}` : `${at}, in ${area}`;
+  if (area) return floor > 0 ? `${area} on ${on}` : `${at}, ${area}`;
   return at;
 }
 

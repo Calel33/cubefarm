@@ -139,16 +139,18 @@ export function ideaChip(i: IdeaView): string {
 }
 
 /** An idea's story: who pinned it and when, where, the CEO's note, its issues or PR, and the picture. */
-export function IdeaStoryBody({ idea }: { idea: IdeaView }) {
+export function IdeaStoryBody({ idea, showText = true }: { idea: IdeaView; showText?: boolean }) {
   const repos = useStore((s) => s.repos);
   const ceo = useStore((s) => s.agents.ceo?.name ?? 'The CEO');
   const url = (repoId: string) => repos.find((r) => r.id === repoId)?.url ?? null;
   const prRepo = idea.links[0]?.repoId;
   return (
     <div className={`idea-story idea-${idea.status}`}>
-      <p className="idea-story-text" style={{ borderColor: idea.color }}>
-        {IDEA_KIND_ICON[idea.kind]} {idea.text}
-      </p>
+      {showText && (
+        <p className="idea-story-text" style={{ borderColor: idea.color }}>
+          {IDEA_KIND_ICON[idea.kind]} {idea.text}
+        </p>
+      )}
       <p className="small">
         <span className={`idea-chip idea-chip-${idea.status}`}>{ideaChip(idea)}</span> · {idea.floor ? `for ${floorName(idea.floor)}` : 'company-wide'}
       </p>
@@ -222,7 +224,7 @@ export function IdeasList() {
               </span>
               <span className={`idea-chip idea-chip-${i.status}`}>{ideaChip(i)}</span>
             </button>
-            {open === i.id && <IdeaStoryBody idea={i} />}
+            {open === i.id && <IdeaStoryBody idea={i} showText={false} />}
           </li>
         ))}
       </ul>

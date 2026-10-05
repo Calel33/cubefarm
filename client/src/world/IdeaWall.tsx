@@ -36,11 +36,11 @@ function drawCard(ctx: CanvasRenderingContext2D, x: number, y: number, w: number
   ctx.beginPath();
   ctx.arc(x + w / 2, y + 10, Math.max(6, w * 0.035), 0, Math.PI * 2);
   ctx.fill();
-  const size = Math.max(14, Math.round(h * 0.12));
+  const size = Math.max(14, Math.round(h * 0.135));
   ctx.font = `600 ${size}px ${SANS}`;
   ctx.fillStyle = declined ? '#8a867f' : '#2d3142';
   ctx.textBaseline = 'top';
-  const lines = wrap(ctx, `${IDEA_KIND_ICON[idea.kind]} ${idea.text}`, w - 20, Math.max(1, Math.floor((h * 0.6) / (size * 1.2))));
+  const lines = wrap(ctx, `${IDEA_KIND_ICON[idea.kind]} ${idea.text}`, w - 20, Math.max(1, Math.floor((h * 0.55) / (size * 1.2))));
   lines.forEach((l, i) => ctx.fillText(l, x + 10, y + h * 0.16 + i * size * 1.2));
   // the status along the bottom
   const foot = Math.max(12, Math.round(h * 0.1));
@@ -62,15 +62,16 @@ function drawCard(ctx: CanvasRenderingContext2D, x: number, y: number, w: number
     ctx.fillStyle = '#6c7086';
     ctx.fillText(idea.status === 'new' ? '🆕 new' : '👀 seen by the CEO', x + 10, fy);
   }
-  ctx.fillStyle = declined ? '#9a958c' : '#6c7086';
-  ctx.textAlign = 'right';
-  ctx.font = `500 ${Math.round(foot * 0.9)}px ${SANS}`;
-  ctx.fillText(idea.by, x + w - 10, fy);
-  ctx.textAlign = 'left';
-  if (idea.status === 'shipped') {
+  if (idea.status !== 'shipped') {
+    ctx.fillStyle = declined ? '#9a958c' : '#6c7086';
+    ctx.textAlign = 'right';
+    ctx.font = `500 ${Math.round(foot * 0.9)}px ${SANS}`;
+    ctx.fillText(idea.by, x + w - 10, fy);
+    ctx.textAlign = 'left';
+  } else {
     // the 🎉 sticker, slapped on at an angle
-    const r = Math.min(w, h) * 0.22;
-    ctx.translate(x + w - r * 0.9, y + h - r * 1.3);
+    const r = Math.min(w, h) * 0.15;
+    ctx.translate(x + w - r * 1.1, y + h - r * 1.1);
     ctx.rotate(-0.25);
     ctx.fillStyle = '#7CFFB2';
     ctx.beginPath();
@@ -100,7 +101,7 @@ function drawWall(ctx: CanvasRenderingContext2D, g: WallGrid, floor: number, ide
   ctx.textBaseline = 'middle';
   ctx.fillStyle = '#ffe066';
   ctx.font = `700 ${Math.round(hh * 0.5)}px ${SANS}`;
-  ctx.fillText(floor ? '💡 Ideas for this floor' : '💡 The idea wall', 18, hh / 2);
+  ctx.fillText(floor ? '💡 Ideas' : '💡 The idea wall', 18, hh / 2);
   ctx.fillStyle = '#ffffff';
   ctx.font = `600 ${Math.round(hh * 0.32)}px ${SANS}`;
   ctx.textAlign = 'right';
@@ -119,9 +120,9 @@ function drawWall(ctx: CanvasRenderingContext2D, g: WallGrid, floor: number, ide
     ctx.stroke();
     ctx.setLineDash([]);
     ctx.fillStyle = '#ffffff';
-    ctx.font = `600 ${Math.round(r.h * 0.13)}px ${SANS}`;
+    ctx.font = `600 ${Math.round(r.h * 0.17)}px ${SANS}`;
     ctx.textBaseline = 'top';
-    wrap(ctx, `＋ Press ${use} to pin your first idea`, r.w - 24, 3).forEach((l, i) => ctx.fillText(l, r.x + 12, r.y + r.h * 0.3 + i * r.h * 0.16));
+    wrap(ctx, `＋ Press ${use} to pin your first idea`, r.w - 24, 3).forEach((l, i) => ctx.fillText(l, r.x + 12, r.y + r.h * 0.22 + i * r.h * 0.21));
   }
 }
 
