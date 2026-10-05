@@ -10,7 +10,9 @@ import { Batches } from './Batched';
 import { CameraRig } from './camera/CameraRig';
 import { Chatter } from './Chatter';
 import { CUT_PLANES } from './camera/rig';
-import { lobbyColliders, officeColliders, ROOF, roofColliders } from './layout';
+import { lobbyColliders, officeColliders, ROOF, roofColliders, setOfficeLook } from './layout';
+import { lookFor, noteLayout, useLookOverride } from './floorLook';
+import './floorStyleProbe';
 import { decorRects } from './decor/decor';
 import { Graphics } from './gfx/Graphics';
 import { Lobby } from './Lobby';
@@ -80,12 +82,22 @@ export function Game() {
   const top = useStore((s) => s.repos.reduce((m, r) => Math.max(m, r.floor), 0));
   const placed = useStore((s) => (repo ? s.progress.floors[repo.id]?.placed : undefined));
   const theme = useTheme((s) => s.id);
+  // The office floor's style and layout (#265): set before anything on it is drawn, as everything placed by desk slot
+  // follows them; a change draws the floor afresh (lookKey), and a layout change walks everyone to their new desk.
+  const over = useLookOverride((s) => s.over);
+  const look = repo ? lookFor(repo, over) : null;
+  if (repo && look) {
+    setOfficeLook(look);
+    noteLayout(repo.id, look.layout);
+  }
+  const lookKey = repo && look ? `${repo.id}:${look.layout}:${look.style}` : null;
   const colliders = useMemo(
     () =>
       onRoof
         ? roofColliders()
-        : [...(isOffice ? [...officeColliders(), ...decorRects(placed ?? {})] : lobbyColliders()), ...decorColliders(theme, isOffice ? 'office' : 'lobby')],
-    [onRoof, isOffice, placed, theme],
+        : [...(look ? [...officeColliders(look.layout, look.style), ...decorRects(placed ?? {})] : lobbyColliders()), ...decorColliders(theme, look ? 'office' : 'lobby')],
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- look is rebuilt every render; its parts are what count
+    [onRoof, look?.layout, look?.style, placed, theme],
   );
   const toRoof = useStore((s) => s.travel?.to === ROOF);
   useEffect(() => {
@@ -120,11 +132,11 @@ export function Game() {
       <City />
       <WorldEvents kind={onRoof ? 'roof' : isOffice ? 'office' : 'lobby'} />
       {/* the floor's repeated parts (desks, chairs, props, people) are drawn as instanced batches (Batched.tsx) */}
-      <Batches key={onRoof ? 'roof' : (repo?.id ?? 'lobby')}>
-        <Suspense fallback={null}>{onRoof ? <Roof top={top} /> : repo ? <OfficeFloor key={repo.id} repo={repo} /> : <Lobby />}</Suspense>
+      <Batches key={onRoof ? 'roof' : (lookKey ?? 'lobby')}>
+        <Suspense fallback={null}>{onRoof ? <Roof top={top} /> : repo && look ? <OfficeFloor key={lookKey} repo={repo} layout={look.layout} style={look.style} /> : <Lobby />}</Suspense>
       </Batches>
       {!onRoof && <Outside key={isOffice ? floor : 0} kind={isOffice ? 'office' : 'lobby'} floor={isOffice ? floor : 0} top={top} />}
-      <ThemeLayer key={onRoof ? ROOF : isOffice ? floor : 0} kind={onRoof ? 'roof' : isOffice ? 'office' : 'lobby'} floor={onRoof ? ROOF : isOffice ? floor : 0} top={top} repoId={repo?.id ?? null} />
+      <ThemeLayer key={onRoof ? ROOF : isOffice ? `${floor}:${lookKey}` : 0} kind={onRoof ? 'roof' : isOffice ? 'office' : 'lobby'} floor={onRoof ? ROOF : isOffice ? floor : 0} top={top} repoId={repo?.id ?? null} />
       <Player colliders={colliders} floor={floor} />
       <Presence />
       <FieldOfView />

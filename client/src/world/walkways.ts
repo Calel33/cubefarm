@@ -178,6 +178,24 @@ export function spot(w: Walkways, id: string): Spot | undefined {
 export const standable = (w: Walkways, x: number, z: number) => clear(w.nav.rects, x, z, WALK_R);
 
 /**
+ * The nearest place to (x, z) a person can stand, in rings 25 cm apart up to 2.5 m out (where they were standing may be
+ * a desk now, after a layout change); null when there's none that close.
+ */
+export function nearestStandable(w: Walkways, x: number, z: number): Pt | null {
+  if (standable(w, x, z)) return { x, z };
+  for (let r = 0.25; r <= 2.5; r += 0.25) {
+    const n = Math.ceil((2 * Math.PI * r) / 0.25);
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * Math.PI * 2;
+      const px = x + Math.cos(a) * r;
+      const pz = z + Math.sin(a) * r;
+      if (standable(w, px, pz)) return { x: px, z: pz };
+    }
+  }
+  return null;
+}
+
+/**
  * A walk from `from` to `to`: a few straight legs round the furniture, as waypoints after `from` ending at `to`.
  * Null when there's no way through.
  */

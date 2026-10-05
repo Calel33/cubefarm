@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useFrame } from '@react-three/fiber';
+import type { FloorLayout } from '../../../shared/floorLook';
 import type { AgentStatus } from '../../../shared/types';
 import { useRenderPaused } from '../perf';
 import { useStore, type Agent } from '../store';
@@ -7,6 +8,7 @@ import type { ChatTopic } from '../ui/chatterLines';
 import { ding } from '../ui/sfx';
 import { WALK_SPEED, type Gesture } from './body';
 import { chatSay } from './Chatter';
+import { takeLayoutMove } from './floorLook';
 import { playerAt } from './camera/rig';
 import './coffeeErrand';
 import {
@@ -51,7 +53,7 @@ import './toyErrands';
 import './events/watch';
 import './roof/roofErrand';
 import type { Pt } from './toys/roombaBrain';
-import { findPath, spot as spotById, standable, steer, walkways, type Body, type FloorKind, type Spot } from './walkways';
+import { deskSpot, findPath, nearestStandable, spot as spotById, standable, steer, walkways, type Body, type FloorKind, type Spot } from './walkways';
 
 // The errand director: sends the people on the floor you're on out on errands (errands.ts) and back, a few at a
 // time. It runs in the render loop, so it pauses with the render (hidden tab, full-screen panel) and nothing piles
@@ -126,6 +128,16 @@ const TOUR: Errand = {
 };
 const CHAT_WAIT = 10; // seconds the first at a chat waits for the others before starting
 
+/** The floor's layout changed under them (#265): up from their old desk and over to their new one. */
+const MOVE: Errand = {
+  name: 'move',
+  work: true, // never sent back: they're on their way to their desk anyway
+  when: () => false, // the director starts it as the floor is drawn in its new layout
+  spot: [],
+  steps: [{ gesture: 'none', seconds: 0.4 }],
+  speed: 1.35,
+};
+
 export function ErrandDirector({
   floor,
   agents,
@@ -150,6 +162,8 @@ export function ErrandDirector({
   gone.current = onGone;
   const run = useMemo(() => ({ clock: 0, tick: 0, fresh: true, lastChat: -20, walkers: [] as Body[], pokeAt: 0 }), []);
   const me = useMemo<Me>(() => ({ id: '', x: 0, z: 0, heading: 0, arrived: false, dt: 0, player: { x: 0, z: 0 } }), []);
+  // The layout everyone was sitting in, when the floor has just been drawn afresh in a new one (floorLook.ts).
+  const [movedFrom] = useState<FloorLayout | undefined>(() => (floor === 'office' && repoId ? takeLayoutMove(repoId) : undefined));
 
   // After a pause, the first frame's delta covers the whole gap: skip it.
   useEffect(() => {
@@ -198,6 +212,17 @@ export function ErrandDirector({
     }
     p.hold = hold;
     ding({ x: 0, y: 2.6, z: HALF_D });
+  };
+
+  /** Up from where their desk was in the old layout (or the nearest place clear of the new one), over to their new desk. */
+  const changeDesks = (p: Person, a: Agent, from: FloorLayout) => {
+    if (a.role !== 'dev') return; // the QA lab stays put
+    const old = deskSpot(a.desk, from);
+    const start = nearestStandable(w, old.x, old.z);
+    const path = start && findPath(w, start, p.home);
+    if (!start || !path) return;
+    placeBody(p.id, start.x, start.z, old.facing);
+    walk(p, 'leaving', MOVE, p.home, path);
   };
 
   /** Let go: up to the spot behind their chair to pick up a box (then out: see 'there'). */
@@ -267,6 +292,7 @@ export function ErrandDirector({
       people.set(a.id, np);
       if (out.has(a.id)) depart(np);
       else if (hire) arrive(np, run.clock > SETTLE ? DOORS_SECONDS : FOLLOW_HOLD);
+      else if (movedFrom && run.clock < SETTLE) changeDesks(np, a, movedFrom);
     }
     for (const [id, p] of people) {
       if (seen.has(id)) continue;
@@ -279,7 +305,8 @@ export function ErrandDirector({
       say(id, null);
       people.delete(id);
     }
-  }, [agents, leavers, floor, w, people, run]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- changeDesks only touches people and run
+  }, [agents, leavers, floor, w, people, run, movedFrom]);
 
   // Leaving the floor: everyone back in their chair for next time.
   useEffect(

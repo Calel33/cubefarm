@@ -1,5 +1,6 @@
 import { memo, useMemo } from 'react';
 import { useShallow } from 'zustand/react/shallow';
+import { FLOOR_LAYOUTS, type FloorLayout, type FloorStyle } from '../../../shared/floorLook';
 import type { RepoView } from '../../../shared/types';
 import { EMPTY_NUMBERS, signLine } from '../ops';
 import { agentsOnRepo, floorPrCounts, useStore } from '../store';
@@ -16,8 +17,10 @@ import { useCanvasTexture } from './interact';
 import { KanbanBoard } from './KanbanBoard';
 import { Jukebox } from './Jukebox';
 import { Leaver, useLeavers } from './Leavers';
-import { DESK_RUGS, HALF_D, HALF_W, JUKEBOX, MAX_DESKS, QA_LAB, QA_ROTATION, QA_RUG, deskPosition, qaDeskPosition } from './layout';
-import { shade } from './materials';
+import { Cubicles } from './Cubicles';
+import { styleLook } from './floorStyles';
+import { HALF_D, HALF_W, JUKEBOX, LAYOUTS, QA_LAB, QA_ROTATION, QA_RUG, qaDeskPosition } from './layout';
+import { mix, shade } from './materials';
 import { MergeConfetti } from './MergeConfetti';
 import { Beacon, useFloorAlarm } from './MissionControl';
 import { CoinBurst } from './decor/CoinBurst';
@@ -27,6 +30,7 @@ import { CoffeeTable, Couch, Kitchenette, Plant, Rug, WallClock, WaterCooler } f
 import { OfficeRituals } from './Rituals';
 import { PongTable } from './PongTable';
 import { Shell } from './Shell';
+import { StyleDressing } from './StyleDressing';
 import { Toys } from './toys';
 
 export function WallSign({
@@ -53,12 +57,15 @@ export function WallSign({
   );
 }
 
-// Made once, so the memoised desks see the same position every render.
-const DEV_DESKS = Array.from({ length: MAX_DESKS }, (_, slot): [number, number, number] => [deskPosition(slot).x, 0, deskPosition(slot).z]);
+// Made once per layout, so the memoised desks see the same position every render.
+const DEV_DESKS = Object.fromEntries(FLOOR_LAYOUTS.map((l) => [l, LAYOUTS[l].desks.map((d): [number, number, number] => [d.x, 0, d.z])])) as Record<FloorLayout, [number, number, number][]>;
 const QA_DESKS = QA_LAB.stations.map((_, slot): [number, number, number] => [qaDeskPosition(slot).x, 0, qaDeskPosition(slot).z]);
 
-/** Memoised, and it only follows this floor's people and PRs: a big company's other floors change many times a second. */
-export const OfficeFloor = memo(function OfficeFloor({ repo }: { repo: RepoView }) {
+/**
+ * Memoised, and it only follows this floor's people and PRs: a big company's other floors change many times a second.
+ * `layout` and `style` are the floor's (or ?layout= / ?style=, floorLook.ts); Game.tsx draws it afresh when they change.
+ */
+export const OfficeFloor = memo(function OfficeFloor({ repo, layout, style }: { repo: RepoView; layout: FloorLayout; style: FloorStyle }) {
   const use = useKeyName('interact');
   const agents = useStore(useShallow((s) => agentsOnRepo(s.agents, repo.id)));
   const devBySlot = useMemo(() => new Map(agents.filter((a) => a.role === 'dev').map((a) => [a.desk, a])), [agents]);
@@ -70,18 +77,22 @@ export const OfficeFloor = memo(function OfficeFloor({ repo }: { repo: RepoView 
   const ops = useStore((s) => signLine(s.ops.floors.find((f) => f.repoId === repo.id) ?? EMPTY_NUMBERS));
   const { alarm, ref: signRef } = useFloorAlarm(repo.id);
   const name = repo.fullName.split('/')[1] ?? repo.fullName;
-  const rugColor = shade(repo.color, 0.24);
+  const looks = styleLook(style);
+  const rugColor = mix(shade(repo.color, 0.24), looks.rug, looks.rugMix);
+  const plan = LAYOUTS[layout];
 
   return (
     <group>
-      <Shell kind="office" accent={repo.color} floorColor="#d9b48a" />
-      {DESK_RUGS.map((r) => (
-        <Rug key={r.minZ} position={[(r.minX + r.maxX) / 2, 0.004, (r.minZ + r.maxZ) / 2]} size={[r.maxX - r.minX, r.maxZ - r.minZ]} color={rugColor} />
+      <Shell kind="office" accent={repo.color} style={looks} />
+      <StyleDressing style={style} desks={plan.desks} />
+      {plan.rugs.map((r) => (
+        <Rug key={`${r.minX},${r.minZ}`} position={[(r.minX + r.maxX) / 2, 0.004, (r.minZ + r.maxZ) / 2]} size={[r.maxX - r.minX, r.maxZ - r.minZ]} color={rugColor} />
       ))}
 
-      {DEV_DESKS.map((position, slot) => (
-        <Desk key={slot} agent={devBySlot.get(slot) ?? null} accent={repo.color} repoId={repo.id} position={position} />
+      {DEV_DESKS[layout].map((position, slot) => (
+        <Desk key={slot} agent={devBySlot.get(slot) ?? null} accent={repo.color} repoId={repo.id} position={position} rotationY={plan.desks[slot].rotY} />
       ))}
+      <Cubicles layout={layout} accent={repo.color} devBySlot={devBySlot} />
 
       {/* QA lab */}
       <Rug position={[(QA_RUG.minX + QA_RUG.maxX) / 2, 0.005, (QA_RUG.minZ + QA_RUG.maxZ) / 2]} size={[QA_RUG.maxX - QA_RUG.minX, QA_RUG.maxZ - QA_RUG.minZ]} color="#ffd8bf" />

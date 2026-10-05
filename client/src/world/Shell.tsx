@@ -7,11 +7,12 @@ import { ELEVATOR, HALF_D, HALF_W, SIDE_DOOR, SIDE_OPENINGS, SIDES, WALL_H, WALL
 import { drawGlass } from './draw';
 import { shade, toon } from './materials';
 import { boxesGeometry, merged, type BoxSpec } from './shapes';
+import { STYLE_LOOKS, type StyleLook } from './floorStyles';
+import { brickMaterial, floorTexture, worldUVs } from './styleTextures';
 import { Box } from './Toon';
 import { LampHalos } from './sky/lamps';
 import { SunPatches } from './sky/SunPatches';
 
-const WALL = '#fbf3e4';
 const INK = '#1f1d2b';
 
 type FloorKind = 'office' | 'lobby';
@@ -102,16 +103,19 @@ function panes(kind: FloorKind) {
   );
 }
 
+/** The walls' material: the style's paint, or its brick (on world-scaled UVs, worldUVs). */
+const wallMaterial = (s: StyleLook) => (s.wallPattern === 'brick' ? brickMaterial(s.wall, s.wallDetail) : toon(s.wall));
+
 /** The real windows in the side walls, with the walls round them and the side doors' frames. */
-function SideWalls({ kind }: { kind: FloorKind }) {
-  const walls = useMemo(() => sideWalls(kind), [kind]);
+function SideWalls({ kind, style }: { kind: FloorKind; style: StyleLook }) {
+  const walls = useMemo(() => worldUVs(sideWalls(kind)), [kind]);
   const frame = useMemo(() => frames(kind), [kind]);
   const glass = useMemo(() => panes(kind), [kind]);
   useEffect(() => () => [walls, frame, glass].forEach((g) => g.dispose()), [walls, frame, glass]);
   return (
     <group>
-      <mesh geometry={walls} material={toon(WALL)} receiveShadow />
-      <mesh geometry={frame} material={toon('#ffffff')}>
+      <mesh geometry={walls} material={wallMaterial(style)} receiveShadow />
+      <mesh geometry={frame} material={toon(style.accentTrim ? '#ffffff' : style.trim)}>
         <Outlines thickness={0.018} color={INK} />
       </mesh>
       <mesh geometry={glass} material={paneMaterial()} renderOrder={1} />
@@ -122,51 +126,39 @@ function SideWalls({ kind }: { kind: FloorKind }) {
 // Every light's panel is the same shape: one batch draws them all (Batched.tsx).
 const PANEL = look(new THREE.PlaneGeometry(1.25, 0.38), { shading: 'glowNight' });
 
-function CeilingLight({ position }: { position: [number, number, number] }) {
+function CeilingLight({ position, panel }: { position: [number, number, number]; panel: string }) {
   return (
     <group position={position}>
       <Box size={[1.4, 0.06, 0.5]} position={[0, 0, 0]} color="#e9ecef" shadow={false} />
-      <Part look={PANEL} color="#fffbe8" position={[0, -0.035, 0]} rotation={[Math.PI / 2, 0, 0]} />
+      <Part look={PANEL} color={panel} position={[0, -0.035, 0]} rotation={[Math.PI / 2, 0, 0]} />
     </group>
   );
 }
 
-export function Shell({ kind, accent, floorColor }: { kind: FloorKind; accent: string; floorColor: string }) {
-  const wall = toon(WALL);
+/** Where the ceiling lights hang (and a style's pendants instead, StyleDressing.tsx). */
+export const CEILING_LIGHTS: [number, number, number][] = [];
+for (let x = -12; x <= 12; x += 6) for (let z = -8; z <= 8; z += 5.5) CEILING_LIGHTS.push([x, WALL_H - 0.04, z]);
+
+/**
+ * A floor's walls, floor, ceiling and lights. `style` is an office floor's interior style (floorStyles.ts); `floorColor`
+ * overrides its floor's colour (the lobby's).
+ */
+export function Shell({ kind, accent, floorColor, style = STYLE_LOOKS.classic }: { kind: FloorKind; accent: string; floorColor?: string; style?: StyleLook }) {
+  const wall = wallMaterial(style);
   const t = 0.3;
   const { doorHalf, doorHeight } = ELEVATOR;
-  const lights = useMemo(() => {
-    const out: [number, number, number][] = [];
-    for (let x = -12; x <= 12; x += 6) for (let z = -8; z <= 8; z += 5.5) out.push([x, WALL_H - 0.04, z]);
-    return out;
-  }, []);
-  const floorTex = useMemo(() => {
-    // cartoon wood planks
-    const c = document.createElement('canvas');
-    c.width = c.height = 512;
-    const ctx = c.getContext('2d')!;
-    const plankH = 64;
-    for (let row = 0; row < 512 / plankH; row++) {
-      const offset = (row * 173) % 512;
-      for (let x = -offset; x < 512; x += 256) {
-        const v = ((row * 7 + Math.floor((x + offset) / 256) * 3) % 5) * 0.012 - 0.024;
-        ctx.fillStyle = shade(floorColor, v);
-        ctx.fillRect(x, row * plankH, 256, plankH);
-        ctx.fillStyle = shade(floorColor, -0.1);
-        ctx.fillRect(x, row * plankH, 3, plankH);
-        ctx.fillStyle = shade(floorColor, v - 0.035);
-        for (let g = 0; g < 3; g++) ctx.fillRect(x + 30 + g * 70, row * plankH + 18 + g * 12, 60, 2);
-      }
-      ctx.fillStyle = shade(floorColor, -0.12);
-      ctx.fillRect(0, row * plankH, 512, 3);
-    }
-    const tex = new THREE.CanvasTexture(c);
-    tex.colorSpace = THREE.SRGBColorSpace;
-    tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
-    tex.repeat.set(8, 6);
-    tex.anisotropy = 8;
-    return tex;
-  }, [floorColor]);
+  const lights = CEILING_LIGHTS;
+  const floorTex = floorTexture(style.floorPattern, floorColor ?? style.floor, style.gloss);
+  // the north wall and the south wall either side of (and over) the elevator, on world UVs for brick
+  const solid = useMemo(() => {
+    const south = HALF_W - doorHalf;
+    return [
+      worldUVs(new THREE.BoxGeometry(HALF_W * 2 + t * 2, WALL_H, t).translate(0, WALL_H / 2, -HALF_D - t / 2)),
+      ...[-1, 1].map((s) => worldUVs(new THREE.BoxGeometry(south, WALL_H, t).translate(s * (doorHalf + south / 2), WALL_H / 2, HALF_D + t / 2))),
+      worldUVs(new THREE.BoxGeometry(doorHalf * 2, WALL_H - doorHeight, t).translate(0, (WALL_H + doorHeight) / 2, HALF_D + t / 2)),
+    ];
+  }, [doorHalf, doorHeight]);
+  useEffect(() => () => solid.forEach((g) => g.dispose()), [solid]);
 
   const southSeg = HALF_W - doorHalf;
   // the side walls' skirting and stripe stop at their doors
@@ -185,28 +177,18 @@ export function Shell({ kind, accent, floorColor }: { kind: FloorKind; accent: s
         <planeGeometry args={[HALF_W * 2, HALF_D * 2]} />
         <meshToonMaterial map={floorTex} />
       </mesh>
-      <mesh rotation={[Math.PI / 2, 0, 0]} position={[0, WALL_H, 0]} material={toon('#f3efe6')}>
+      <mesh rotation={[Math.PI / 2, 0, 0]} position={[0, WALL_H, 0]} material={toon(style.ceiling)}>
         <planeGeometry args={[HALF_W * 2, HALF_D * 2]} />
       </mesh>
-      {lights.map((p) => (
-        <CeilingLight key={p.join()} position={p} />
-      ))}
+      {!style.pendants && lights.map((p) => <CeilingLight key={p.join()} position={p} panel={style.lamp} />)}
       <LampHalos positions={lights} />
       <SunPatches kind={kind} />
 
       {/* walls */}
-      <mesh position={[0, WALL_H / 2, -HALF_D - t / 2]} material={wall} receiveShadow>
-        <boxGeometry args={[HALF_W * 2 + t * 2, WALL_H, t]} />
-      </mesh>
-      <SideWalls kind={kind} />
-      {[-1, 1].map((s) => (
-        <mesh key={s} position={[s * (doorHalf + southSeg / 2), WALL_H / 2, HALF_D + t / 2]} material={wall} receiveShadow>
-          <boxGeometry args={[southSeg, WALL_H, t]} />
-        </mesh>
+      {solid.map((g, i) => (
+        <mesh key={i} geometry={g} material={wall} receiveShadow={i < 3} />
       ))}
-      <mesh position={[0, (WALL_H + doorHeight) / 2, HALF_D + t / 2]} material={wall}>
-        <boxGeometry args={[doorHalf * 2, WALL_H - doorHeight, t]} />
-      </mesh>
+      <SideWalls kind={kind} style={style} />
 
       {/* skirting + accent stripe */}
       {[
@@ -216,12 +198,24 @@ export function Shell({ kind, accent, floorColor }: { kind: FloorKind; accent: s
         { p: [doorHalf + southSeg / 2, 0, HALF_D - 0.02] as const, r: Math.PI, w: southSeg },
       ].map(({ p, r, w }, i) => (
         <group key={i} position={[p[0], 0, p[2]]} rotation={[0, r, 0]}>
-          <mesh position={[0, 0.06, 0]} material={toon(shade(accent, -0.2))}>
+          <mesh position={[0, 0.06, 0]} material={toon(style.accentTrim ? shade(accent, -0.2) : style.trim)}>
             <boxGeometry args={[w, 0.12, 0.04]} />
           </mesh>
-          <mesh position={[0, 0.95, 0]} material={toon(accent)}>
-            <boxGeometry args={[w, 0.12, 0.03]} />
-          </mesh>
+          {style.wallPattern === 'panelling' ? (
+            // wood panelling up to a dado rail, the floor's accent colour along the rail
+            <>
+              <mesh position={[0, 0.58, 0.005]} material={toon(style.wallDetail)}>
+                <boxGeometry args={[w, 1.04, 0.03]} />
+              </mesh>
+              <mesh position={[0, 1.12, 0.01]} material={toon(accent)}>
+                <boxGeometry args={[w, 0.07, 0.05]} />
+              </mesh>
+            </>
+          ) : (
+            <mesh position={[0, 0.95, 0]} material={toon(style.accentTrim ? accent : style.trim)}>
+              <boxGeometry args={[w, 0.12, 0.03]} />
+            </mesh>
+          )}
         </group>
       ))}
     </group>
