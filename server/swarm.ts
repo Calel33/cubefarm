@@ -41,6 +41,7 @@ import { Ticker } from './ticker.ts';
 import { Outbox } from './outbox.ts';
 import { DEFAULT_LISTEN, DEFAULT_VOICE, listenSettings, speaks, Voice, voiceSettings } from './voice.ts';
 import { Notifier } from './notifier.ts';
+import { ModManager } from './mods.ts';
 import { clip, plainText, stuckAgents } from './notify.ts';
 import { DEFAULT_NOTIFY, notifySettings, officeUrl } from '../shared/notify.ts';
 import { agentActivity, lineActivity, sameActivity, type SeenActivity } from '../shared/activity.ts';
@@ -545,6 +546,8 @@ export class Swarm {
   private readonly envSecrets = envSecrets(process.env);
   /** Notifications to the manager's devices and chat apps (docs/pocket.md). The demo's only log what they'd send. */
   readonly notifier: Notifier;
+  /** The manager's mods (docs/mods.md): props, posters, songs and themes from <SWARM_HOME>/mods. */
+  readonly mods: ModManager;
   private toldStuck = new Set<string>(); // `${agentId}:${endedAt}`: agents in an error the manager was notified about
 
   constructor(private backend: Backend) {
@@ -580,6 +583,13 @@ export class Swarm {
       broadcast: (note) => this.broadcast({ type: 'notify', note }),
       channelsChanged: (notifyChannels) => this.broadcast({ type: 'notifyChannels', notifyChannels }),
       log: (line) => console.warn(line),
+    });
+    this.mods = new ModManager({
+      dir: path.join(HOME_DIR, 'mods'),
+      stateFile: path.join(HOME_DIR, 'mods.json'),
+      exampleDir: path.resolve(import.meta.dirname, '..', 'examples', 'mods', 'hello-mod'),
+      changed: (mods) => this.broadcast({ type: 'mods', mods }),
+      log: (line) => console.log(line),
     });
     this.previews = new Previews(backend, {
       emit: (id) => {
@@ -684,6 +694,7 @@ export class Swarm {
     await this.voice.init();
     await this.weather.init();
     await this.notifier.init();
+    await this.mods.init().catch((err) => console.warn('could not read the mods folder', err));
     for (const r of this.state.repos) if (r.localPath) this.backend.setLocalPath(r.fullName, r.localPath);
     const interrupted: PersistedAgent[] = [];
     for (const a of this.state.agents) {
@@ -970,6 +981,7 @@ export class Swarm {
       officeUpdate: this.officeHead ? this.officeUpdateView() : undefined,
       progress: this.progressView(),
       pong: this.state.pong,
+      mods: this.mods.current(),
     };
   }
 
@@ -4135,7 +4147,7 @@ export class Swarm {
 
   /** The team's holiday greeting (shared/themes.ts) from the CEO, once a day while a theme is on. */
   private greet() {
-    const text = dueGreeting(new Date(), this.state.settings.themes, this.state.settings.managerName || this.user || '', this.state.messages);
+    const text = dueGreeting(new Date(), this.state.settings.themes, this.state.settings.managerName || this.user || '', this.state.messages, this.mods.themeWindows());
     if (text) this.postMessage('ceo', text);
   }
 

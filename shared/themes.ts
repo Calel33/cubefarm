@@ -1,15 +1,17 @@
 // Holiday themes, the pure side both ends share: which holidays there are and when (by the local date), the manager's
 // Settings → Themes (auto, off or a forced theme, holidays switched off one by one, their birthday), which theme is on
 // for a date, and the team's phone greeting for the day. The client dresses the office from this (world/themes/); the
-// server sends the greeting.
+// server sends the greeting. Mods add themes of their own (shared/mods.ts), known by their key (`mod:<mod>/<id>`).
+
+import { inModDates, isModKey, type ModDates, type ModKey } from './mods.ts';
 
 export const THEME_IDS = ['halloween', 'christmas', 'newyear', 'valentines', 'easter', 'birthday'] as const;
 export type ThemeId = (typeof THEME_IDS)[number];
 
 export const isThemeId = (v: unknown): v is ThemeId => typeof v === 'string' && (THEME_IDS as readonly string[]).includes(v);
 
-/** auto: by the date · off: never · a theme: that one, whatever the date. */
-export type ThemeMode = 'auto' | 'off' | ThemeId;
+/** auto: by the date · off: never · a theme (a mod's too): that one, whatever the date. */
+export type ThemeMode = 'auto' | 'off' | ThemeId | ModKey;
 
 export interface Birthday {
   month: number; // 1-12
@@ -18,8 +20,8 @@ export interface Birthday {
 
 export interface ThemeSettings {
   mode: ThemeMode;
-  /** Holidays the office doesn't celebrate in auto mode. */
-  disabled: ThemeId[];
+  /** Holidays (and mod themes) the office doesn't celebrate in auto mode. */
+  disabled: (ThemeId | ModKey)[];
   /** The manager's birthday (no year), or null. */
   birthday: Birthday | null;
 }
@@ -52,8 +54,11 @@ export function birthdayOf(v: unknown): Birthday | null {
 export function themeSettings(base: ThemeSettings, patch: unknown): ThemeSettings {
   const p = (patch && typeof patch === 'object' ? patch : {}) as Partial<Record<keyof ThemeSettings, unknown>>;
   const out: ThemeSettings = { mode: base.mode, disabled: [...base.disabled], birthday: base.birthday ? { ...base.birthday } : null };
-  if (p.mode === 'auto' || p.mode === 'off' || isThemeId(p.mode)) out.mode = p.mode;
-  if (Array.isArray(p.disabled)) out.disabled = THEME_IDS.filter((id) => (p.disabled as unknown[]).includes(id));
+  if (p.mode === 'auto' || p.mode === 'off' || isThemeId(p.mode) || isModKey(p.mode)) out.mode = p.mode;
+  if (Array.isArray(p.disabled)) {
+    const list = p.disabled as unknown[];
+    out.disabled = [...THEME_IDS.filter((id) => list.includes(id)), ...new Set(list.filter(isModKey))].slice(0, THEME_IDS.length + 64);
+  }
   if (p.birthday === null) out.birthday = null;
   else if (p.birthday !== undefined) out.birthday = birthdayOf(p.birthday) ?? out.birthday;
   return out;
@@ -128,10 +133,10 @@ export function autoTheme(date: Date, s: ThemeSettings): ThemeId | null {
 /** Where the theme on screen came from: the date, a forced theme, nothing (off), or the URL (?theme=, for QA). */
 export type ThemeSource = 'auto' | 'forced' | 'off' | 'url';
 
-/** `?theme=` in the URL: a theme, auto or off; null when absent or unknown. */
+/** `?theme=` in the URL: a theme (a mod's key too), auto or off; null when absent or unknown. */
 export function parseThemeParam(search: string): ThemeMode | null {
   const v = new URLSearchParams(search).get('theme')?.trim().toLowerCase();
-  return v === 'auto' || v === 'off' || isThemeId(v) ? v : null;
+  return v === 'auto' || v === 'off' || isThemeId(v) || isModKey(v) ? v : null;
 }
 
 /**
@@ -148,13 +153,34 @@ export function parseDateParam(search: string): number | null {
   return t.getMonth() === Number(mo) - 1 && t.getDate() === Number(d) ? t.getTime() : null;
 }
 
-/** The theme on for `date`: the URL's override (QA) beats the settings' mode, which is auto, off or a forced theme. */
-export function resolveTheme(date: Date, s: ThemeSettings, override: ThemeMode | null = null): { id: ThemeId | null; source: ThemeSource } {
+/** A loaded, switched-on mod theme as the theme engine sees it: its key, its days (null: only when forced) and greetings. */
+export interface ModThemeWindow {
+  key: ModKey;
+  dates: ModDates | null;
+  greetings: readonly string[];
+}
+
+/**
+ * The theme on for `date`: the URL's override (QA) beats the settings' mode, which is auto, off or a forced theme. A
+ * mod theme comes back as `mod` (its key) with `id` null. By date, the birthday comes first, then the mods' themes
+ * (the manager added them on purpose), then the holidays. A forced mod theme that's gone (removed, switched off) goes
+ * by date instead.
+ */
+export function resolveTheme(
+  date: Date,
+  s: ThemeSettings,
+  override: ThemeMode | null = null,
+  mods: readonly ModThemeWindow[] = [],
+): { id: ThemeId | null; source: ThemeSource; mod?: ModKey } {
   const mode = override ?? s.mode;
   const source: ThemeSource = override && override !== 'auto' ? 'url' : mode === 'off' ? 'off' : mode === 'auto' ? 'auto' : 'forced';
   if (mode === 'off') return { id: null, source };
-  if (mode !== 'auto') return { id: mode, source };
-  return { id: autoTheme(date, s), source: 'auto' };
+  if (isModKey(mode) && mods.some((m) => m.key === mode)) return { id: null, source, mod: mode };
+  if (mode !== 'auto' && !isModKey(mode)) return { id: mode, source };
+  const id = autoTheme(date, s);
+  if (id === 'birthday') return { id, source: 'auto' };
+  const mod = mods.find((m) => m.dates && !s.disabled.includes(m.key) && inModDates(m.dates, date));
+  return mod ? { id: null, source: 'auto', mod: mod.key } : { id, source: 'auto' };
 }
 
 // ---------- the phone greeting ----------
@@ -181,13 +207,14 @@ export const greetingLines = (id: ThemeId, name: string) => GREETINGS[id].map((l
 const dayHash = (key: string) => [...key].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7);
 
 /**
- * The greeting due now, or null: the line for the theme on today (from the settings; a birthday's comes from the
- * CEO), unless one of the theme's lines already went out today.
+ * The greeting due now, or null: the line for the theme on today (from the settings and the mods' themes; a birthday's
+ * comes from the CEO), unless one of the theme's lines already went out today.
  */
-export function dueGreeting(now: Date, s: ThemeSettings, name: string, sent: readonly { at: number; text: string }[]): string | null {
-  const { id } = resolveTheme(now, s);
-  if (!id) return null;
-  const lines = greetingLines(id, name);
+export function dueGreeting(now: Date, s: ThemeSettings, name: string, sent: readonly { at: number; text: string }[], mods: readonly ModThemeWindow[] = []): string | null {
+  const { id, mod } = resolveTheme(now, s, null, mods);
+  const fill = (l: string) => l.replace('{name}', name ? `, ${name}` : '');
+  const lines = mod ? (mods.find((m) => m.key === mod)?.greetings ?? []).map(fill) : id ? greetingLines(id, name) : [];
+  if (!lines.length) return null;
   const today = dayKey(now);
   if (sent.some((m) => lines.includes(m.text) && dayKey(new Date(m.at)) === today)) return null;
   return lines[dayHash(today) % lines.length];

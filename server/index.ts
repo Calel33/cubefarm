@@ -287,6 +287,32 @@ app.post('/api/repos/:repo/decor/place', route((req) => swarm.placeDecoration(re
 app.post('/api/progress/coffee', route((req) => swarm.drankCoffee(req.body?.id)));
 app.post('/api/progress/demo', route((req) => swarm.demoProgress(req.body ?? {})));
 
+// Mods (docs/mods.md): reload the folder, switch one on or off, copy the example in, and their files: only those a
+// loaded manifest names, read-only, as their own type and never as a page of the office.
+app.post('/api/mods/reload', route(() => swarm.mods.scan()));
+app.post('/api/mods/example', route(() => swarm.mods.installExample()));
+app.patch(
+  '/api/mods/:mod',
+  route((req) => {
+    if (typeof req.body?.enabled !== 'boolean') throw new HttpError(400, 'enabled must be true or false');
+    return swarm.mods.setEnabled(String(req.params.mod), req.body.enabled);
+  }),
+);
+app.get('/api/mods/:mod/files/*file', async (req, res, next) => {
+  try {
+    const parts = (req.params as { file?: string | string[] }).file;
+    const asset = await swarm.mods.file(String(req.params.mod), Array.isArray(parts) ? parts.join('/') : String(parts ?? ''));
+    if (!asset) return void res.status(404).end();
+    res.setHeader('Content-Type', asset.mime);
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Content-Security-Policy', "default-src 'none'");
+    res.setHeader('Cache-Control', 'no-cache');
+    res.end(await fs.promises.readFile(asset.real));
+  } catch (err) {
+    next(err);
+  }
+});
+
 // Serve the built client: the published package, or `npm start` after `npm run build`.
 const dist = path.resolve(import.meta.dirname, '../dist');
 if (fs.existsSync(dist)) {

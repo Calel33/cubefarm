@@ -4,6 +4,7 @@ import type { ProgressView, RewardView } from './progress.ts';
 
 import type { WeatherSettings, WeatherView, WorldEventSettings } from './outside.ts';
 import type { ThemeSettings } from './themes.ts';
+import type { ModsView } from './mods.ts';
 import type { AgentStyle } from './looks.ts';
 
 export type AgentStatus =
@@ -567,6 +568,7 @@ export interface WorldSnapshot {
   notifyChannels: NotifyChannelsView;
   progress: ProgressView; // coins, decorations and achievements (#210)
   pong: Record<string, PongRow[]>; // each floor's ping-pong leaderboard by repo id, best first
+  mods?: ModsView; // the mods folder: what loaded, what didn't and why (docs/mods.md)
 }
 
 /** What changed about an agent since the office last sent it, with its id; every field for one it never sent. */
@@ -611,6 +613,7 @@ export type ServerEvent =
   | { type: 'progress'; progress: ProgressView }
   | { type: 'reward'; reward: RewardView }
   | { type: 'pong'; repoId: string; board: PongRow[] }
+  | { type: 'mods'; mods: ModsView }
   | { type: 'toast'; level: 'info' | 'success' | 'error'; text: string }
   // Presence (shared/presence.ts): relayed between the office's tabs, never persisted.
   | { type: 'visitors'; you: string; visitors: VisitorView[] }
