@@ -4,6 +4,7 @@ import type { AgentStyle } from '../../shared/looks';
 import type { AgentCli, AgentPromptView, GhRepoSummary, NotifyChannel, NotifyChannelsView, NotifyWebhook, OfficeUpdateView, PreviewView, ProjectFolderView, PrPreviewView, RepoView, SwarmSettings, UsageView, VoiceCacheView, VoiceOption } from '../../shared/types';
 import type { JournalChunk, JournalDayView } from '../../shared/journal';
 import type { DecorItem, ProgressView } from '../../shared/progress';
+import type { IdeaKind, IdeaView } from '../../shared/ideas';
 
 async function call<T = unknown>(method: string, url: string, body?: unknown, toast = true): Promise<T> {
   // The time-lapse shows a recorded day: nothing in it can be acted on.
@@ -112,6 +113,7 @@ export const api = {
   /** The demo only: a usage warning, or the limit, as if a session had reported it. */
   simulateUsage: (kind: 'warning' | 'limit') => call<UsageView>('POST', '/api/usage/simulate', { kind }),
   messageCeo: (text: string) => call('POST', '/api/ceo/message', { text }),
+  pinIdea: (idea: { text: string; kind: IdeaKind; floor: number; where: string | null; by: string; color: string; shot: string | null }) => call<IdeaView>('POST', '/api/ideas', idea),
   ceoReview: () => call('POST', '/api/ceo/review'),
   phoneRead: (at: number) => call('POST', '/api/phone/read', { at }),
   /** A finished ping-pong game on a floor, for its leaderboard (shared/pong.ts parsePongResult). */

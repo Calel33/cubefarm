@@ -12,6 +12,7 @@ import { isKey } from './controls';
 import { Key } from './Key';
 import { Games, type GameId } from './games/Games';
 import { HolidayStrip } from './HolidayStrip';
+import { IdeasList } from './IdeaPanels';
 import { replayKind } from './voiceQueue';
 import { effectiveModel } from '../../../shared/models';
 
@@ -560,6 +561,7 @@ export function Phone({ tab: initialTab, requestId }: { tab?: PhoneTab; requestI
   const tabs: [PhoneTab, string, string, number][] = [
     ['chat', '💬', ceoName, tab === 'chat' ? 0 : unread],
     ['hires', '📄', 'Hires', pending],
+    ['ideas', '💡', 'Ideas', 0],
     ['company', '📊', 'Company', 0],
     ['games', '🎮', 'Games', 0],
   ];
@@ -576,6 +578,7 @@ export function Phone({ tab: initialTab, requestId }: { tab?: PhoneTab; requestI
           {tab !== 'games' && <LobbyNudge />}
           {tab === 'chat' && <Chat />}
           {tab === 'hires' && <Hires focusId={requestId} />}
+          {tab === 'ideas' && <IdeasList />}
           {tab === 'company' && <Company />}
           {tab === 'games' && <Games game={game} onGame={setGame} />}
         </div>

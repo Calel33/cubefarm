@@ -1,5 +1,6 @@
 // Pocket mode (docs/pocket.md): the office as a 2D app for a phone or any touch screen, on the same store, snapshot
-// and REST as the 3D office. Five tabs: Company (each floor's pipeline), Chat (the CEO), Kanban, Team and Approvals.
+// and REST as the 3D office. Six tabs: Company (each floor's pipeline), Chat (the CEO), Kanban, Team, Ideas (the idea
+// wall) and Approvals.
 // Nothing 3D loads here until "Open the 3D office".
 import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import { agentsOnRepo, kanbanFor, unreadMessages, useStore } from '../store';
@@ -10,6 +11,7 @@ import { NotifySettings } from '../ui/NotifySettings';
 import { AccessibilitySettings } from '../ui/AccessibilitySettings';
 import { Panel } from '../ui/Panel';
 import { Chat } from '../ui/Phone';
+import { IdeasList } from '../ui/IdeaPanels';
 import { setMode } from './mode';
 import { approvalsBadge, pipelineOf, waitingOnYou, type Pipeline } from './pocketData';
 import { Approvals } from './PocketApprovals';
@@ -19,8 +21,8 @@ import { Team } from './PocketTeam';
 const TerminalView = lazy(() => import('../ui/TerminalView').then((m) => ({ default: m.TerminalView })));
 const AppViewer = lazy(() => import('../ui/AppViewer').then((m) => ({ default: m.AppViewer })));
 
-export type PocketTab = 'company' | 'chat' | 'kanban' | 'team' | 'approvals';
-const TABS: PocketTab[] = ['company', 'chat', 'kanban', 'team', 'approvals'];
+export type PocketTab = 'company' | 'chat' | 'kanban' | 'team' | 'ideas' | 'approvals';
+const TABS: PocketTab[] = ['company', 'chat', 'kanban', 'team', 'ideas', 'approvals'];
 
 /** The tab a link (a notification's ?tab=) asks for. */
 function tabFrom(url: string | null | undefined): PocketTab | null {
@@ -255,6 +257,7 @@ export default function Pocket() {
     ['chat', '💬', ceoName, tab === 'chat' ? 0 : unread],
     ['kanban', '📋', 'Kanban', 0],
     ['team', '👥', 'Team', 0],
+    ['ideas', '💡', 'Ideas', 0],
     ['approvals', '✋', 'Approvals', waiting],
   ];
   return (
@@ -285,6 +288,11 @@ export default function Pocket() {
             {tab === 'chat' && <Chat autoFocus={false} />}
             {tab === 'kanban' && <Board repoId={repoId} pick={setRepoId} />}
             {tab === 'team' && <Team focusRepo={repoId} />}
+            {tab === 'ideas' && (
+              <div className="pk-page">
+                <IdeasList />
+              </div>
+            )}
             {tab === 'approvals' && <Approvals />}
           </>
         )}

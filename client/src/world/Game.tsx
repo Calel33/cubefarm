@@ -18,6 +18,7 @@ import { OfficeFloor } from './OfficeFloor';
 import { Outside } from './Outside';
 import { City } from './outside/City';
 import { Player } from './Player';
+import { ViewGrab } from './ViewGrab';
 import { Presence } from './presence/Presence';
 import { DayLights } from './sky/DayLights';
 import { Sky } from './sky/Sky';
@@ -134,6 +135,7 @@ export function Game() {
       <Soundscape kind={onRoof ? 'roof' : isOffice ? 'office' : 'lobby'} repoId={repo?.id ?? null} />
       <TypingSounds />
       <Chatter />
+      <ViewGrab />
       <FrameWhilePaused paused={paused} />
       <AdaptiveResolution onChange={setMaxDpr} />
       <Graphics paused={paused || photo} />

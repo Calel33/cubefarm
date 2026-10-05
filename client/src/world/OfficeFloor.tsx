@@ -12,6 +12,7 @@ import { drawSign } from './draw';
 import { Elevator } from './Elevator';
 import { ErrandDirector } from './ErrandDirector';
 import { Gong } from './Gong';
+import { FloorIdeaWall } from './IdeaWall';
 import { useCanvasTexture } from './interact';
 import { KanbanBoard } from './KanbanBoard';
 import { Jukebox } from './Jukebox';
@@ -107,6 +108,7 @@ export const OfficeFloor = memo(function OfficeFloor({ repo }: { repo: RepoView 
       <MvpSign agents={agents} />
       <Decorations repo={repo} />
       <Gong repoId={repo.id} />
+      <FloorIdeaWall floor={repo.floor} />
       <PongTable repoId={repo.id} />
       <Elevator floorLabel={`▲ ${repo.floor} · ${name}`} accent={repo.color} />
       <Toys floor="office" />

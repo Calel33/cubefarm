@@ -122,7 +122,7 @@ export const floorName = (floor: number) => (floor === 0 ? 'the lobby' : floor <
  */
 export function whereText(floor: number, looking: string | null, area: string | null): string {
   const on = floorName(floor);
-  const at = floor === 0 || floor < 0 ? `in ${on}` : `on ${on}`;
+  const at = floor === 0 ? 'in the lobby' : `on ${on}`;
   if (looking) return floor > 0 ? `looking at ${looking} on ${on}` : `${at}, looking at ${looking}`;
   if (area) return floor > 0 ? `in ${area} on ${on}` : `${at}, in ${area}`;
   return at;

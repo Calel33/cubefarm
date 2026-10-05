@@ -4981,3 +4981,119 @@ html[data-high-contrast] :is(button, a, input, select, textarea, summary, [tabin
   outline-offset: 2px;
   box-shadow: 0 0 0 6px #ffe066;
 }
+
+/* ---------- the idea wall (ui/IdeaPanels.tsx) ---------- */
+.idea-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.idea-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+  min-width: 180px;
+}
+.idea-choices {
+  align-items: flex-start;
+}
+.idea-kind {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 9px;
+  border: 2px solid rgba(31, 29, 43, 0.15);
+  border-radius: 999px;
+  cursor: pointer;
+  font-size: 0.88rem;
+}
+.idea-kind-on {
+  border-color: var(--accent);
+  background: rgba(201, 162, 107, 0.15);
+}
+.idea-shot-toggle {
+  flex-wrap: wrap;
+}
+.idea-shot-thumb {
+  width: 120px;
+  border-radius: 6px;
+  border: 1px solid rgba(31, 29, 43, 0.2);
+}
+.idea-actions {
+  justify-content: flex-end;
+}
+.idea-story-text {
+  font-size: 1.05rem;
+  white-space: pre-wrap;
+  border-left: 6px solid;
+  padding: 8px 12px;
+  background: #fffbea;
+  border-radius: 6px;
+}
+.idea-note {
+  background: rgba(155, 93, 229, 0.1);
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+.idea-shot {
+  width: 100%;
+  border-radius: 8px;
+  margin-top: 6px;
+}
+.idea-chip {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  background: #eef0f6;
+  white-space: nowrap;
+}
+.idea-chip-planned {
+  background: #ffe8a3;
+}
+.idea-chip-shipped {
+  background: #c7f5d9;
+}
+.idea-chip-declined {
+  background: #e5e5e5;
+  color: #555;
+}
+.ideas-add {
+  width: 100%;
+}
+.ideas-rows {
+  list-style: none;
+  padding: 0;
+  margin: 8px 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.ideas-row {
+  border-left: 5px solid;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.85);
+  padding: 4px 8px;
+}
+.ideas-row.idea-declined {
+  opacity: 0.7;
+}
+.ideas-row-head {
+  display: flex;
+  gap: 8px;
+  width: 100%;
+  align-items: flex-start;
+  justify-content: space-between;
+  background: none;
+  border: 0;
+  padding: 4px 0;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.ideas-row-text {
+  overflow-wrap: anywhere;
+}

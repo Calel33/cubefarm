@@ -10,6 +10,7 @@ import { Kiosk, TrophyShelf } from './decor/RewardsCorner';
 import { drawSign, roundRect, SANS } from './draw';
 import { Elevator } from './Elevator';
 import { ErrandDirector } from './ErrandDirector';
+import { LobbyIdeaWall } from './IdeaWall';
 import { useCanvasTexture, useInteractable } from './interact';
 import { Jukebox } from './Jukebox';
 import { MissionControl } from './MissionControl';
@@ -372,6 +373,7 @@ export function Lobby() {
       <Toys floor="lobby" />
       <Directory />
       <TimeLapseScreen />
+      <LobbyIdeaWall />
       <TrophyCabinet />
       <Kiosk />
       <TrophyShelf />

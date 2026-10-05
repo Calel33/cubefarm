@@ -8,6 +8,7 @@ import { speechText } from '../../shared/speech';
 import { showDesktopNote } from './notifications';
 import { EMPTY_OPS, newAlarms } from './ops';
 import type { DecorItem, ProgressView } from '../../shared/progress';
+import type { IdeaView } from '../../shared/ideas';
 import { needsManager, qaCardNote, type CardTone } from './qaCard';
 import { announce } from './ui/announce';
 import { alarm, audioUnlocked, chirp, cue } from './ui/sfx';
@@ -21,7 +22,7 @@ import { emitReward } from './world/decor/rewards';
 
 export type Agent = Omit<AgentView, 'log'>;
 
-export type PhoneTab = 'chat' | 'hires' | 'company' | 'games';
+export type PhoneTab = 'chat' | 'hires' | 'ideas' | 'company' | 'games';
 
 export type Overlay =
   | { kind: 'terminal'; agentId: string }
@@ -38,7 +39,11 @@ export type Overlay =
   | { kind: 'catalogue'; repoId?: string } // the lobby kiosk (#210)
   | { kind: 'decor-box'; repoId: string } // a floor's decor box
   /** The floor as a list (Settings → Accessibility): who is there, their status and what they're doing. */
-  | { kind: 'floorList' };
+  | { kind: 'floorList' }
+  /** Pin an idea on the idea wall (ui/IdeaPanels.tsx); `floor`: the wall's floor (0: the lobby's, company-wide). */
+  | { kind: 'ideaPin'; floor: number }
+  /** One idea's story: who, when, the CEO's note, its issue or PR, the picture. */
+  | { kind: 'idea'; id: string };
 
 /** Help's tabs: how the office works, and the controls (keys, mouse, gamepad). */
 export type HelpTab = 'office' | 'controls';
@@ -126,6 +131,7 @@ interface State {
   ticker: TickerItem[]; // the floors' recent activity lines, oldest first (world/ActivityTicker.tsx)
   notifyChannels: NotifyChannelsView; // which chat apps have a webhook saved (hints only) and how many devices get push
   pong: Record<string, PongRow[]>; // each floor's ping-pong leaderboard by repo id, best first
+  ideas: IdeaView[]; // the idea wall (shared/ideas.ts), oldest first
   restarting: boolean; // the connection dropped because the office is restarting to update
   visitors: VisitorView[]; // everyone else appearing in the office, any floor (presence; their poses skip the store)
   replaying: boolean; // the time-lapse (replay.ts) is showing a recorded day: live events wait, live actions are off
@@ -251,6 +257,7 @@ export const useStore = create<State>((set, get) => ({
   ticker: [],
   notifyChannels: { webhooks: { discord: { set: false, hint: '' }, slack: { set: false, hint: '' }, telegram: { set: false, hint: '' }, ntfy: { set: false, hint: '' } }, pushDevices: 0 },
   pong: {},
+  ideas: [],
   restarting: false,
   visitors: [],
   replaying: false,
@@ -319,6 +326,7 @@ export const useStore = create<State>((set, get) => ({
           notifyChannels: d.notifyChannels ?? get().notifyChannels,
           progress: d.progress ?? { floors: {}, achievements: [], coffees: 0, merges: 0 },
           pong: d.pong ?? {},
+          ideas: d.ideas ?? get().ideas, // the time-lapse's frames don't carry them
           restarting: false,
           floor: floorExists ? get().floor : 0,
         });
@@ -526,6 +534,14 @@ export const useStore = create<State>((set, get) => ({
       case 'pong':
         set({ pong: { ...get().pong, [ev.repoId]: ev.board } });
         break;
+      case 'idea': {
+        const prev = get().ideas.find((i) => i.id === ev.idea.id);
+        set({ ideas: prev ? get().ideas.map((i) => (i.id === ev.idea.id ? ev.idea : i)) : [...get().ideas, ev.idea] });
+        if (cues && prev && prev.status !== ev.idea.status && (ev.idea.status === 'planned' || ev.idea.status === 'declined')) {
+          announce(`Your idea "${ev.idea.text.slice(0, 60)}" is ${ev.idea.status === 'planned' ? 'planned' : 'declined'}.`);
+        }
+        break;
+      }
     }
   },
 

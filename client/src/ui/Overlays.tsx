@@ -7,6 +7,7 @@ import { Catalogue, DecorBoxPanel } from './Catalogue';
 import { ControlsSettings } from './ControlsSettings';
 import { ElevatorPanel } from './ElevatorPanel';
 import { FloorList } from './FloorList';
+import { IdeaStory, PinIdea } from './IdeaPanels';
 import { Key, MoveKeys } from './Key';
 import { Interview } from './Interview';
 import { KanbanView } from './KanbanView';
@@ -322,6 +323,13 @@ function Help({ tab: initial }: { tab?: HelpTab }) {
             The CEO studies every new floor, writes its QA brief, gives each agent a job that fits the project, turns your project briefs into issues and proposes hires. Hires wait for your approval unless you switch
             hiring to auto in the manager's console.
           </p>
+          <h3>The idea wall</h3>
+          <p>
+            Had an idea mid-walk? The corkboard in the lobby (south wall, by the sofa) takes ideas for the whole company, and the small one beside each floor's whiteboard takes that floor's. Press{' '}
+            <Key action="interact" /> on it to pin one: type it or hold the 🎙️, pick the floor and the kind, and keep where you were and a picture of your view if you like. Your phone's 💡 Ideas tab
+            pins one from anywhere. A few quiet minutes after the last new idea, the CEO reads them all at once, turns related ones into one issue each, or declines with a reason: the card gets a 📌 and
+            the issue, a 🎉 when it ships, and goes grey when declined. <Key action="interact" /> on a card tells its story.
+          </p>
           <h3>Your team</h3>
           <p>
             Each agent is a real coding agent running in its own terminal, working in its own git worktree. Walk up behind them to read their laptop, or press <Key action="interact" /> (or click) on a desk to open their
@@ -419,5 +427,9 @@ export function Overlays() {
       return <DecorBoxPanel repoId={overlay.repoId} />;
     case 'floorList':
       return <FloorList />;
+    case 'ideaPin':
+      return <PinIdea floor={overlay.floor} />;
+    case 'idea':
+      return <IdeaStory id={overlay.id} />;
   }
 }
