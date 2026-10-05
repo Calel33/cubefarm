@@ -3,6 +3,7 @@ import { TeamStats } from './CareerCard';
 import { api } from '../api';
 import { PreviewPill, PreviewSettings } from './AppViewer';
 import { agentsOnRepo, pendingRequests, useStore, type ManagerTab } from '../store';
+import { LAYOUT_INFO, STYLE_INFO, cleanFloorLook } from '../../../shared/floorLook';
 import { CEO_ID, type AgentCli, type EffortLevel, type OfficeUpdateView, type RepoView } from '../../../shared/types';
 import { CLAUDE_MODELS } from '../../../shared/models';
 import { BriefEditor, CliOptions, CliSelect, cliName, EFFORTS, EffortSelect, LookSelect, ModelInput, NameInput, PromptPreview, SpecialtyInput, TitleInput } from './AgentSettings';
@@ -19,6 +20,7 @@ import { Resume } from './Phone';
 import { ProjectPicker } from './ProjectPicker';
 import { StatusPill } from './TerminalView';
 import { ThemeSettings } from './ThemeSettings';
+import { FloorLookSettings } from './FloorLookSettings';
 import { TimeLapseTab } from './TimeLapse';
 import { VoiceSettings } from './VoiceSettings';
 import { AccessibilitySettings } from './AccessibilitySettings';
@@ -168,6 +170,12 @@ function FloorRow({ repo, all }: { repo: RepoView; all: RepoView[] }) {
           ))}
         </div>
       )}
+      <details className="small preview-details">
+        <summary>
+          🎨 Style &amp; layout · {STYLE_INFO[cleanFloorLook(repo).style].name} · {LAYOUT_INFO[cleanFloorLook(repo).layout].name}
+        </summary>
+        <FloorLookSettings repo={repo} />
+      </details>
       <details className="small preview-details">
         <summary>
           🖥️ App preview · <PreviewPill status={repo.preview.status} />
