@@ -16,7 +16,7 @@ import { useCameraView } from '../world/camera/rig';
 import { CameraHud, OverviewButton } from './CameraHud';
 import { useKeyName } from './controls';
 import { Key, MoveKeys } from './Key';
-import { ROOF } from '../world/layout';
+import { BASEMENT, ROOF } from '../world/layout';
 import { useRoof } from '../world/roof/roofState';
 import { RoofHud } from './RoofHud';
 import { usageChip } from '../ops';
@@ -128,8 +128,10 @@ export function HUD() {
   const onFoot = useCameraView((s) => s.mode) === 'first';
 
   const roof = floor === ROOF;
+  const basement = floor === BASEMENT;
   const scope = useRoof((s) => s.telescope); // the telescope's eyepiece has its own crosshair
-  const repo = floor === 0 || roof ? null : repoOnFloor(repos, floor);
+  const repo = floor === 0 || roof || basement ? null : repoOnFloor(repos, floor);
+  const usageState = useStore((s) => s.usage.state);
   const running = useMemo(() => Object.values(agents).filter((a) => a.status === 'working' || a.status === 'preparing').length, [agents]);
   const floorAgents = repo ? Object.values(agents).filter((a) => a.repoId === repo.id) : [];
   const qa = useStore((s) => s.qa);
@@ -137,14 +139,16 @@ export function HUD() {
 
   return (
     <div className="hud">
-      <div className="hud-floor" style={{ ['--accent' as string]: roof ? '#7cc6fe' : (repo?.color ?? '#ff8a5b') }}>
-        <div className="floor-num">{roof ? 'R' : repo ? repo.floor : 'G'}</div>
+      <div className="hud-floor" style={{ ['--accent' as string]: roof ? '#7cc6fe' : basement ? '#4ea8ff' : (repo?.color ?? '#ff8a5b') }}>
+        <div className="floor-num">{roof ? 'R' : basement ? 'B' : repo ? repo.floor : 'G'}</div>
         <div>
-          <div className="floor-name">{roof ? `${settings.companyName || 'cubefarm'} · Roof terrace` : repo ? repo.fullName : `${settings.companyName || 'cubefarm'} · Lobby`}</div>
+          <div className="floor-name">{roof ? `${settings.companyName || 'cubefarm'} · Roof terrace` : basement ? `${settings.companyName || 'cubefarm'} · Server room` : repo ? repo.fullName : `${settings.companyName || 'cubefarm'} · Lobby`}</div>
           <div className="floor-sub">
             {roof
               ? 'deck chairs, the barbecue and the telescope'
-              : repo && prs
+              : basement
+                ? `${running} session${running === 1 ? '' : 's'} live · power ${usageState === 'normal' ? 'normal' : usageState === 'pacing' ? 'pacing' : 'paused'}`
+                : repo && prs
                 ? `${floorAgents.length} agents · ${floorAgents.filter((a) => a.status === 'working' || a.status === 'preparing').length} working · ${prs.inQa} in QA · ${prs.ready} ready to merge${prs.needsYou ? ` · ${prs.needsYou} need${prs.needsYou === 1 ? 's' : ''} you` : ''}`
                 : `${repos.length} floor${repos.length === 1 ? '' : 's'} connected`}
           </div>
@@ -204,7 +208,7 @@ export function HUD() {
       )}
 
       <div className={`fade ${travel?.phase === 'closing' ? 'fade-in' : ''}`}>
-        {travel && <div className="fade-label">{travel.to === 0 ? 'Lobby' : travel.to === ROOF ? 'Roof' : `Floor ${travel.to}`}</div>}
+        {travel && <div className="fade-label">{travel.to === 0 ? 'Lobby' : travel.to === ROOF ? 'Roof' : travel.to === BASEMENT ? 'Basement' : `Floor ${travel.to}`}</div>}
       </div>
 
       <CameraHud />

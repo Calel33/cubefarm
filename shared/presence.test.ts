@@ -64,7 +64,7 @@ describe('parsePresenceEvent', () => {
   });
 
   it('rejects bad floors, non-numbers and unknown kinds', () => {
-    expect(parsePresenceEvent({ type: 'pose', ts: 1, f: -2, x: 0, z: 0, h: 0, p: 0 })).toBeNull(); // -1 is the roof
+    expect(parsePresenceEvent({ type: 'pose', ts: 1, f: -3, x: 0, z: 0, h: 0, p: 0 })).toBeNull(); // -1 is the roof, -2 the basement
     expect(parsePresenceEvent({ type: 'pose', ts: 1, f: 1.5, x: 0, z: 0, h: 0, p: 0 })).toBeNull();
     expect(parsePresenceEvent({ type: 'pose', ts: 1, f: 1, x: 'NaN', z: 0, h: 0, p: 0 })).toBeNull();
     expect(parsePresenceEvent({ type: 'pose', f: 1, x: 0, z: 0, h: 0, p: 0 })).toBeNull(); // no timestamp

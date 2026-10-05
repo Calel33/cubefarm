@@ -10,7 +10,8 @@ import { Batches } from './Batched';
 import { CameraRig } from './camera/CameraRig';
 import { Chatter } from './Chatter';
 import { CUT_PLANES } from './camera/rig';
-import { lobbyColliders, officeColliders, ROOF, roofColliders } from './layout';
+import { BASEMENT, basementColliders, lobbyColliders, officeColliders, ROOF, roofColliders } from './layout';
+import { basementRowsKey } from './basement/basementState';
 import { decorRects } from './decor/decor';
 import { Graphics } from './gfx/Graphics';
 import { Lobby } from './Lobby';
@@ -34,6 +35,9 @@ import { WorldEvents } from './events/WorldEvents';
 // The roof is its own chunk: fetched as the elevator heads up there, never by a floor that doesn't go.
 const loadRoof = () => import('./roof/Roof');
 const Roof = lazy(loadRoof);
+// So is the basement's server room, fetched as the elevator heads down.
+const loadBasement = () => import('./basement/Basement');
+const Basement = lazy(loadBasement);
 // Photo mode's camera and drawing load the first time it's opened.
 const PhotoScene = lazy(() => import('../photo/PhotoScene'));
 
@@ -75,22 +79,30 @@ export function Game() {
   const floor = useStore((s) => s.floor);
   const repos = useStore((s) => s.repos);
   const onRoof = floor === ROOF;
-  const repo = floor === 0 || onRoof ? null : repoOnFloor(repos, floor);
+  const down = floor === BASEMENT;
+  const repo = floor === 0 || onRoof || down ? null : repoOnFloor(repos, floor);
   const isOffice = !!repo;
   const top = useStore((s) => s.repos.reduce((m, r) => Math.max(m, r.floor), 0));
   const placed = useStore((s) => (repo ? s.progress.floors[repo.id]?.placed : undefined));
   const theme = useTheme((s) => s.id);
+  const racks = useStore(basementRowsKey); // how many racks stand in each row, down in the basement
   const colliders = useMemo(
     () =>
-      onRoof
-        ? roofColliders()
-        : [...(isOffice ? [...officeColliders(), ...decorRects(placed ?? {})] : lobbyColliders()), ...decorColliders(theme, isOffice ? 'office' : 'lobby')],
-    [onRoof, isOffice, placed, theme],
+      down
+        ? basementColliders(racks.split(',').map(Number))
+        : onRoof
+          ? roofColliders()
+          : [...(isOffice ? [...officeColliders(), ...decorRects(placed ?? {})] : lobbyColliders()), ...decorColliders(theme, isOffice ? 'office' : 'lobby')],
+    [down, racks, onRoof, isOffice, placed, theme],
   );
   const toRoof = useStore((s) => s.travel?.to === ROOF);
   useEffect(() => {
     if (toRoof) void loadRoof();
   }, [toRoof]);
+  const toBasement = useStore((s) => s.travel?.to === BASEMENT);
+  useEffect(() => {
+    if (toBasement) void loadBasement();
+  }, [toBasement]);
   // Stop drawing while nobody can see the office; switching back to 'always' draws a fresh frame at once.
   const paused = useRenderPaused();
   const [maxDpr, setMaxDpr] = useState(MAX_DPR);
@@ -114,24 +126,25 @@ export function Game() {
       }}
     >
       <DayClock />
-      <Weather kind={onRoof ? 'roof' : isOffice ? 'office' : 'lobby'} />
-      <Sky />
-      <DayLights />
-      <City />
-      <WorldEvents kind={onRoof ? 'roof' : isOffice ? 'office' : 'lobby'} />
+      {/* the basement has no windows: no weather, sky, sun, city or holiday dressing down there, and none of their cost */}
+      {!down && <Weather kind={onRoof ? 'roof' : isOffice ? 'office' : 'lobby'} />}
+      {!down && <Sky />}
+      {!down && <DayLights />}
+      {!down && <City />}
+      {!down && <WorldEvents kind={onRoof ? 'roof' : isOffice ? 'office' : 'lobby'} />}
       {/* the floor's repeated parts (desks, chairs, props, people) are drawn as instanced batches (Batched.tsx) */}
-      <Batches key={onRoof ? 'roof' : (repo?.id ?? 'lobby')}>
-        <Suspense fallback={null}>{onRoof ? <Roof top={top} /> : repo ? <OfficeFloor key={repo.id} repo={repo} /> : <Lobby />}</Suspense>
+      <Batches key={down ? 'basement' : onRoof ? 'roof' : (repo?.id ?? 'lobby')}>
+        <Suspense fallback={null}>{down ? <Basement /> : onRoof ? <Roof top={top} /> : repo ? <OfficeFloor key={repo.id} repo={repo} /> : <Lobby />}</Suspense>
       </Batches>
-      {!onRoof && <Outside key={isOffice ? floor : 0} kind={isOffice ? 'office' : 'lobby'} floor={isOffice ? floor : 0} top={top} />}
-      <ThemeLayer key={onRoof ? ROOF : isOffice ? floor : 0} kind={onRoof ? 'roof' : isOffice ? 'office' : 'lobby'} floor={onRoof ? ROOF : isOffice ? floor : 0} top={top} repoId={repo?.id ?? null} />
+      {!onRoof && !down && <Outside key={isOffice ? floor : 0} kind={isOffice ? 'office' : 'lobby'} floor={isOffice ? floor : 0} top={top} />}
+      {!down && <ThemeLayer key={onRoof ? ROOF : isOffice ? floor : 0} kind={onRoof ? 'roof' : isOffice ? 'office' : 'lobby'} floor={onRoof ? ROOF : isOffice ? floor : 0} top={top} repoId={repo?.id ?? null} />}
       <Player colliders={colliders} floor={floor} />
       <Presence />
       <FieldOfView />
       <CameraRig />
       <Travel />
       <SoundListener />
-      <Soundscape kind={onRoof ? 'roof' : isOffice ? 'office' : 'lobby'} repoId={repo?.id ?? null} />
+      <Soundscape kind={down ? 'basement' : onRoof ? 'roof' : isOffice ? 'office' : 'lobby'} repoId={repo?.id ?? null} />
       <TypingSounds />
       <Chatter />
       <FrameWhilePaused paused={paused} />

@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { useStore } from '../store';
-import { ROOF } from '../world/layout';
+import { BASEMENT, ROOF } from '../world/layout';
 import { Panel } from './Overlays';
 
 export function ElevatorPanel() {
@@ -13,6 +13,7 @@ export function ElevatorPanel() {
     const onKey = (e: KeyboardEvent) => {
       if (e.key.toLowerCase() === 'g' || e.key === '0') goToFloor(0);
       else if (e.key.toLowerCase() === 'r') goToFloor(ROOF);
+      else if (e.key.toLowerCase() === 'b') goToFloor(BASEMENT);
       else if (/^[1-9]$/.test(e.key) && repos.some((r) => r.floor === Number(e.key))) goToFloor(Number(e.key));
     };
     window.addEventListener('keydown', onKey);
@@ -48,8 +49,14 @@ export function ElevatorPanel() {
           <span className="floor-btn-name">Lobby &amp; manager's office</span>
           <span className="floor-btn-meta">connect repos · hire · file issues</span>
         </button>
+        {/* the basement: always the bottom stop */}
+        <button className={`floor-btn ${floor === BASEMENT ? 'floor-btn-here' : ''}`} style={{ ['--accent' as string]: '#4ea8ff' }} onClick={() => goToFloor(BASEMENT)}>
+          <span className="floor-btn-num">B</span>
+          <span className="floor-btn-name">Server room</span>
+          <span className="floor-btn-meta">a rack per session · the terminal keeper · Claude's usage meter</span>
+        </button>
         {repos.length === 0 && <p className="muted">No floors yet. Head to the manager's office to connect a GitHub repo or start a new project.</p>}
-        <p className="muted small">Tip: press a floor number (or G, or R for the roof) while this panel is open.</p>
+        <p className="muted small">Tip: press a floor number (or G, R for the roof, B for the basement) while this panel is open.</p>
       </div>
     </Panel>
   );

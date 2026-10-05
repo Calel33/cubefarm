@@ -3,7 +3,7 @@ import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import { loadView, pendingRequests, saveView, unreadMessages, useStore, type Focus } from '../store';
 import { api } from '../api';
-import { EYE_HEIGHT, ROOF, SPAWN, collide, surfaceAt, type Rect } from './layout';
+import { BASEMENT, EYE_HEIGHT, ROOF, SPAWN, collide, surfaceAt, type Rect } from './layout';
 import { interactables } from './interact';
 import { shutDoorways } from './doors';
 import { LOOK_RADIANS_PER_PX, createLookFilter, filterLookDelta, resetLookFilter, useLookPrefs } from './look';
@@ -522,7 +522,7 @@ export function Player({ colliders, floor }: { colliders: Rect[]; floor: number 
       p.yaw = yaw;
       p.pitch = pitch;
     } else camera.position.y = EYE_HEIGHT + (moving && comfort.headBob ? Math.sin(bob.current) * 0.035 : 0);
-    footstepsFollow(bob.current, moving, speed > 5, surfaceAt(floor === ROOF ? 'roof' : floor === 0 ? 'lobby' : 'office', camera.position.x, camera.position.z));
+    footstepsFollow(bob.current, moving, speed > 5, surfaceAt(floor === ROOF ? 'roof' : floor === BASEMENT ? 'basement' : floor === 0 ? 'lobby' : 'office', camera.position.x, camera.position.z));
     camera.rotation.set(pitch + (p?.tilt ?? 0) + (comfort.cameraShake ? sipPose.head : 0), yaw, 0, 'YXZ');
     playerAt.x = camera.position.x;
     playerAt.z = camera.position.z;

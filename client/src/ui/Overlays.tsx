@@ -275,6 +275,12 @@ function Help({ tab: initial }: { tab?: HelpTab }) {
             <Key action="interact" /> again takes it once it's done, then <Key action="interact" /> eats it a bite at a time), or look through the telescope (<Key action="interact" />; the mouse aims and the wheel zooms): the billboards on the rooftops by day, the moon and the
             constellations at night. The string lights come on at dusk. Idle teammates go up for a break now and then, and the CEO takes calls up there.
           </p>
+        <p>
+          The bottom stop is the basement's server room (<kbd>B</kbd> on the panel): a rack for every agent's session in rows by floor, its little LCD with their name and colour, a status light (green working, blue
+          testing, amber fixing, red on an error, dim idle) and activity lights that blink faster the more they're doing. A rack whose session ends spins down. Preview servers get small racks labelled with their port,
+          and the terminal keeper in the middle runs a cable to every live terminal. Press <kbd>E</kbd> on a rack to open that agent's terminal. On the west wall Claude's usage is the building's power meter: the room
+          dims while the office paces itself and goes to red emergency lighting when it's paused; while it paces, pull the big lever (<kbd>E</kbd>) to resume full speed. The CRT on the east wall scrolls the office's log.
+        </p>
           <h3>Mission control</h3>
           <p>
             The curved bank of screens behind reception shows the whole company at a glance: the pipeline (issues ready, being built, in QA, being fixed, ready to merge, needing you), merges today and over the

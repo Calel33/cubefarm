@@ -555,6 +555,92 @@ export function roofColliders(): Rect[] {
   return out;
 }
 
+// ---------- the basement server room (basement/Basement.tsx) ----------
+
+/** The basement's stop on the elevator (store.floor): below the lobby. */
+export const BASEMENT = -2;
+
+/**
+ * A rack: w wide, h tall and d deep, `pitch` apart along its row; a preview server's rack is `small` tall. Every rack's
+ * front faces south (+z), towards the elevator.
+ */
+export const RACK = { w: 0.56, h: 2.0, d: 0.9, small: 1.1, pitch: 0.63 };
+/**
+ * The rows of racks run east–west on lines at these z (their middles), nearest the elevator first. The central aisle
+ * splits each line into a west and an east segment, from |x| = `in` out to |x| = `out`.
+ */
+export const RACK_ROWS = { zs: [3.2, 0.9, -1.4, -3.7, -6.0, -8.3, -10.6], in: 3.3, out: 14.7 };
+/** How many racks stand in one segment, and how many segments (west then east, line by line from the elevator) there are. */
+export const RACKS_PER_SEGMENT = Math.floor((RACK_ROWS.out - RACK_ROWS.in) / RACK.pitch);
+export const RACK_SEGMENTS = RACK_ROWS.zs.length * 2;
+export const MAX_RACKS = RACKS_PER_SEGMENT * RACK_SEGMENTS;
+/** The cable trays: one over every segment's racks and a spine down the central aisle from the keeper, at y. */
+export const TRAY = { y: 2.32, w: 0.42, h: 0.08 };
+
+/** -1 for a west segment, 1 for an east one. */
+export const segmentSide = (segment: number) => (segment % 2 === 0 ? -1 : 1);
+/** The z of segment `segment`'s line. */
+export const segmentZ = (segment: number) => RACK_ROWS.zs[Math.floor(segment / 2)];
+
+/** Where rack `k` of segment `segment` stands (its middle): the first one beside the central aisle. */
+export function rackSpot(segment: number, k: number) {
+  return { x: segmentSide(segment) * (RACK_ROWS.in + RACK.pitch * (k + 0.5)), z: segmentZ(segment) };
+}
+
+/** The solid of a segment holding `count` racks (null when it's empty). */
+export function rackRowRect(segment: number, count: number): Rect | null {
+  if (count <= 0) return null;
+  const s = segmentSide(segment);
+  const a = RACK_ROWS.in + (RACK.pitch - RACK.w) / 2;
+  const b = RACK_ROWS.in + RACK.pitch * count - (RACK.pitch - RACK.w) / 2;
+  const z = segmentZ(segment);
+  return { minX: s < 0 ? -b : a, maxX: s < 0 ? -a : b, minZ: z - RACK.d / 2, maxZ: z + RACK.d / 2, h: RACK.h };
+}
+
+/** The terminal keeper (ptyHost): the big unit in the middle of the open floor, in front of the elevator. */
+export const KEEPER = { x: 0, z: 6.2, w: 2.6, d: 1.4, h: 2.2 };
+/**
+ * The power wall on the west wall, facing east: Claude's usage as an analogue gauge (radius r, its middle y up), the
+ * wall display beside it (w × h) and the big lever (a wall box w × h, `d` out from the wall) that resumes full speed.
+ */
+export const POWER_WALL = {
+  gauge: { z: 7.2, y: 2.05, r: 0.95 },
+  display: { z: 9.85, y: 1.95, w: 2.3, h: 1.25 },
+  lever: { z: 4.95, y: 1.35, w: 0.9, h: 1.1, d: 0.35 },
+};
+/** The wall CRT on the east wall, on its console desk (w along the wall, d out), scrolling the office's log. */
+export const LOG_CRT = { z: 7.4, desk: { w: 2.6, d: 0.9, h: 0.78 }, w: 1.7, h: 1.25, depth: 0.75 };
+/** The perforated floor tiles the chilled air comes up through, in the cold aisles in front of the racks. */
+export const VENTS: { x: number; z: number }[] = RACK_ROWS.zs.slice(0, -1).flatMap((z, i) =>
+  [-11.6, -6.2, 6.2, 11.6].filter((_, j) => (i + j) % 2 === 0).map((x) => ({ x, z: z + RACK.d / 2 + 0.7 })),
+);
+
+/** The basement's colliders: solid walls (no side doors down here), the elevator cabin, the keeper, the power wall and the
+ * log's desk, and each segment's racks (`counts[s]` racks in segment s). */
+export function basementColliders(counts: readonly number[]): Rect[] {
+  const t = SHELL_T;
+  const { doorHalf, cabinHalf, depth } = ELEVATOR;
+  const pw = POWER_WALL;
+  const out: Rect[] = [
+    { minX: -HALF_W - t, maxX: HALF_W + t, minZ: -HALF_D - t, maxZ: -HALF_D },
+    { minX: -HALF_W - t, maxX: -HALF_W, minZ: -HALF_D, maxZ: HALF_D },
+    { minX: HALF_W, maxX: HALF_W + t, minZ: -HALF_D, maxZ: HALF_D },
+    { minX: -HALF_W, maxX: -doorHalf, minZ: HALF_D, maxZ: HALF_D + t },
+    { minX: doorHalf, maxX: HALF_W, minZ: HALF_D, maxZ: HALF_D + t },
+    { minX: -cabinHalf - t, maxX: -cabinHalf, minZ: HALF_D, maxZ: HALF_D + depth },
+    { minX: cabinHalf, maxX: cabinHalf + t, minZ: HALF_D, maxZ: HALF_D + depth },
+    { minX: -cabinHalf, maxX: cabinHalf, minZ: HALF_D + depth, maxZ: HALF_D + depth + t },
+    rect(KEEPER.x, KEEPER.z, KEEPER.w, KEEPER.d, KEEPER.h),
+    { minX: -HALF_W, maxX: -HALF_W + pw.lever.d, minZ: pw.lever.z - pw.lever.w / 2, maxZ: pw.lever.z + pw.lever.w / 2, h: pw.lever.y + pw.lever.h / 2 },
+    { minX: HALF_W - LOG_CRT.desk.d, maxX: HALF_W, minZ: LOG_CRT.z - LOG_CRT.desk.w / 2, maxZ: LOG_CRT.z + LOG_CRT.desk.w / 2, h: LOG_CRT.desk.h + LOG_CRT.h },
+  ];
+  counts.forEach((n, s) => {
+    const r = rackRowRect(s, n);
+    if (r) out.push(r);
+  });
+  return out;
+}
+
 // ---------- what's underfoot ----------
 
 export type Surface = 'wood' | 'rug' | 'lobby' | 'cabin';
@@ -564,9 +650,10 @@ const LOBBY_RUGS: Rect[] = [LOBBY_RUG, MANAGER_ROOM, CEO_ROOM];
 
 /** The floor under (x, z), for footsteps. A rug's edge counts as rug; past the doorway is the elevator cabin, and
  * outside, a balcony's (or the patio's) paving sounds like the lobby's tiles. On the roof, the decking is wood and
- * the rest is paving. */
-export function surfaceAt(floor: 'office' | 'lobby' | 'roof', x: number, z: number): Surface {
+ * the rest is paving. The basement's raised floor tiles sound like the lobby's. */
+export function surfaceAt(floor: 'office' | 'lobby' | 'roof' | 'basement', x: number, z: number): Surface {
   if (z > HALF_D && Math.abs(x) <= ELEVATOR.cabinHalf) return 'cabin';
+  if (floor === 'basement') return 'lobby';
   if (floor === 'roof') return x >= DECKING.minX && x <= DECKING.maxX && z >= DECKING.minZ && z <= DECKING.maxZ ? 'wood' : 'lobby';
   if (Math.abs(x) > HALF_W) return 'lobby';
   for (const r of floor === 'lobby' ? LOBBY_RUGS : OFFICE_RUGS) {

@@ -6,7 +6,7 @@ import { CEO_ROOM, ELEVATOR, HALF_D, HALF_W, MANAGER_ROOM, QA_RUG, WALL_T, type 
 import type { SoundGroup } from './audioPrefs';
 import { MAX_DISTANCE } from './sfxMix';
 
-type FloorKind = 'office' | 'lobby' | 'roof';
+type FloorKind = 'office' | 'lobby' | 'roof' | 'basement';
 
 /** The kinds of space that sound different. Balconies, the lobby's patio and the roof are 'outside'. */
 export type Room = 'lobby' | 'office' | 'qa' | 'kitchen' | 'cabin' | 'outside';
@@ -27,9 +27,11 @@ const outside = (x: number) => Math.abs(x) > HALF_W + WALL_T / 2;
 /** The kitchenette: the east wall's corner past the side door, by the counter and fridge. */
 const KITCHEN = { minX: HALF_W - 3.4, maxX: HALF_W, minZ: 4.5, maxZ: HALF_D };
 
-/** The kind of space at (x, z) on a floor of `kind`. The lobby's glass offices are carpeted like an office floor. */
+/** The kind of space at (x, z) on a floor of `kind`. The lobby's glass offices are carpeted like an office floor; the
+ * basement's server room is all hard racks and raised tiles, like the QA lab. */
 export function roomAt(kind: FloorKind, x: number, z: number): Room {
   if (inCabin(x, z)) return 'cabin';
+  if (kind === 'basement') return 'qa';
   if (outside(x) || kind === 'roof') return 'outside';
   if (kind === 'lobby') return inRect(MANAGER_ROOM, x, z) || inRect(CEO_ROOM, x, z) ? 'office' : 'lobby';
   if (inRect(KITCHEN, x, z)) return 'kitchen';
@@ -40,7 +42,7 @@ export function roomAt(kind: FloorKind, x: number, z: number): Room {
 /** The enclosure at (x, z), for occlusion. */
 export function zoneAt(kind: FloorKind, x: number, z: number): Zone {
   if (inCabin(x, z)) return 'cabin';
-  if (kind === 'roof') return 'floor'; // the whole deck is one open space
+  if (kind === 'roof' || kind === 'basement') return 'floor'; // the whole deck (or server room) is one open space
   if (outside(x)) return x < 0 ? 'west' : 'east';
   if (kind === 'lobby' && inRect(MANAGER_ROOM, x, z)) return 'manager';
   if (kind === 'lobby' && inRect(CEO_ROOM, x, z)) return 'ceo';

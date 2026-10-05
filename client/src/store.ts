@@ -16,7 +16,7 @@ import { speakable } from './ui/voiceQueue';
 import { emitMerge, mergeBursts, recentQaRecord, rememberQa } from './world/confetti';
 import { takeEmote, takePing, takePose, takeRoster } from './world/presence/presenceState';
 import { gongForMerge } from './world/gongRunner';
-import { ROOF } from './world/layout';
+import { BASEMENT, ROOF } from './world/layout';
 import { emitReward } from './world/decor/rewards';
 
 export type Agent = Omit<AgentView, 'log'>;
@@ -285,8 +285,8 @@ export const useStore = create<State>((set, get) => ({
         for (const q of d.qa) qa[qaKey(q.repoId, q.prNumber)] = q;
         const prPreviews: Record<string, PrPreviewView> = {};
         for (const p of d.prPreviews ?? []) prPreviews[qaKey(p.repoId, p.pr)] = p;
-        // Stay on the current (or remembered) floor if it still exists (the roof always does); otherwise go to the lobby.
-        const floorExists = get().floor === ROOF || d.repos.some((r) => r.floor === get().floor);
+        // Stay on the current (or remembered) floor if it still exists (the roof and the basement always do); otherwise go to the lobby.
+        const floorExists = get().floor === ROOF || get().floor === BASEMENT || d.repos.some((r) => r.floor === get().floor);
         set({
           loaded: true,
           user: d.user,
