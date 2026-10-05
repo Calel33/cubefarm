@@ -221,7 +221,10 @@ const LEAD = /^(add|adds|added|fix|fixes|fixed|make|makes|update|updates|improve
 
 /** A merged PR's title as a short phrase for a headline: "Add rain to the sky (#12)" → "rain to the sky". */
 export function fragment(title: string, max = 40): string {
-  let s = title.replace(/\s*\(#\d+\)\s*$/, '').replace(/^[\w-]+(\([^)]*\))?!?:\s*/, (m) => (/^(feat|fix|chore|docs|refactor|test|perf|style|build|ci)\b/i.test(m) ? '' : m));
+  let s = title.replace(/\s*\(#\d+\)\s*$/, '');
+  // a scope first ("Weather: …", "feat(ui): …") isn't part of what shipped
+  const scoped = /^[\w ()!/-]{1,24}:\s+(.+)$/.exec(s);
+  if (scoped) s = scoped[1];
   s = s.replace(LEAD, '').trim();
   s = s.split(/[:;,—–]|\s-\s/)[0].trim() || s;
   if (s.length > max) s = `${s.slice(0, max - 1).replace(/\s+\S*$/, '')}…`;
