@@ -26,6 +26,8 @@ export interface A11yPrefs {
   reduceMotion: ReduceMotion;
   /** A fixed dot in the middle of the view, which helps against motion sickness. */
   centerDot: boolean;
+  /** Entering glides to where you left off in a second instead of flying in from the street. */
+  skipIntro: boolean;
   /** HUD, phone, console and panels, percent. */
   uiScale: number;
   /** A plainer, wider-spaced font in the panels, easier to read with dyslexia. */
@@ -51,6 +53,7 @@ export const DEFAULT_A11Y: A11yPrefs = {
   cameraShake: true,
   reduceMotion: 'system',
   centerDot: false,
+  skipIntro: false,
   uiScale: 100,
   readableFont: false,
   highContrast: false,
@@ -81,6 +84,7 @@ export function normalizeA11yPrefs(raw: unknown): A11yPrefs {
     cameraShake: bool(p.cameraShake, DEFAULT_A11Y.cameraShake),
     reduceMotion: REDUCE_MOTION.includes(p.reduceMotion as ReduceMotion) ? (p.reduceMotion as ReduceMotion) : DEFAULT_A11Y.reduceMotion,
     centerDot: bool(p.centerDot, DEFAULT_A11Y.centerDot),
+    skipIntro: bool(p.skipIntro, DEFAULT_A11Y.skipIntro),
     uiScale: inRange('uiScale', p.uiScale),
     readableFont: bool(p.readableFont, DEFAULT_A11Y.readableFont),
     highContrast: bool(p.highContrast, DEFAULT_A11Y.highContrast),

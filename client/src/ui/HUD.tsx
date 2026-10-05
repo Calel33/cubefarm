@@ -13,6 +13,8 @@ import { PresenceHud } from './PresenceHud';
 import { officeUpdateChip } from '../officeUpdate';
 import { useA11y } from './a11y';
 import { useCameraView } from '../world/camera/rig';
+import { useCinema } from '../world/camera/cinema';
+import { ElevatorRide } from './ElevatorRide';
 import { CameraHud, OverviewButton } from './CameraHud';
 import { useKeyName } from './controls';
 import { Key, MoveKeys } from './Key';
@@ -126,6 +128,9 @@ export function HUD() {
   const centerDot = useA11y((s) => s.prefs.centerDot);
   // In the overview, the building view and the follow cam there's no crosshair to aim (camera/rig.ts).
   const onFoot = useCameraView((s) => s.mode) === 'first';
+  // hidden while the intro flies in; only the aiming bits go while the away screensaver is up (world/camera/cinema.ts)
+  const cine = useCinema((s) => s.phase);
+  const cineClass = cine === 'start' || cine === 'intro' ? 'hud-intro' : cine === 'off' ? '' : 'hud-away';
 
   const roof = floor === ROOF;
   const scope = useRoof((s) => s.telescope); // the telescope's eyepiece has its own crosshair
@@ -136,7 +141,7 @@ export function HUD() {
   const prs = useMemo(() => (repo ? floorPrCounts(repo, qa) : null), [repo, qa]);
 
   return (
-    <div className="hud">
+    <div className={`hud ${cineClass}`}>
       <div className="hud-floor" style={{ ['--accent' as string]: roof ? '#7cc6fe' : (repo?.color ?? '#ff8a5b') }}>
         <div className="floor-num">{roof ? 'R' : repo ? repo.floor : 'G'}</div>
         <div>
@@ -203,9 +208,7 @@ export function HUD() {
         </div>
       )}
 
-      <div className={`fade ${travel?.phase === 'closing' ? 'fade-in' : ''}`}>
-        {travel && <div className="fade-label">{travel.to === 0 ? 'Lobby' : travel.to === ROOF ? 'Roof' : `Floor ${travel.to}`}</div>}
-      </div>
+      <ElevatorRide />
 
       <CameraHud />
       <PresenceHud />

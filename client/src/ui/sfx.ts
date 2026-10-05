@@ -581,6 +581,20 @@ export function ding(pos?: Vec3) {
   [880, 1318.5].forEach((freq, i) => tone({ name: 'ding', group: 'alerts', pos, freq, at: i * 0.16, dur: 1.1, peak: 0.18, attack: 0.02 }));
 }
 
+/**
+ * Your car arriving: a bell-like chime, once going up and twice coming down (as real lifts do). Each strike is a sine
+ * with a soft inharmonic partial and a long, falling tail.
+ */
+export function elevatorChime(up: boolean) {
+  const notes = up ? [1046.5] : [1046.5, 830.6];
+  notes.forEach((freq, i) => {
+    const at = i * 0.42;
+    tone({ name: 'ding', group: 'alerts', freq, at, dur: 1.6, peak: 0.16, attack: 0.006 });
+    tone({ name: 'ding', group: 'alerts', freq: freq * 2.76, at, dur: 0.5, peak: 0.035, attack: 0.004 });
+    tone({ name: 'ding', group: 'alerts', freq: freq / 2, type: 'triangle', at, dur: 0.9, peak: 0.04, attack: 0.01 });
+  });
+}
+
 /** Air rushing past the elevator car while it travels, rising then settling. */
 export function whoosh(dur = 0.75) {
   noise({ name: 'whoosh', group: 'alerts', dur, peak: 0.1, filter: 'bandpass', freq: 220, to: 900, q: 0.8, attack: dur * 0.45 });

@@ -4,10 +4,13 @@ import * as THREE from 'three';
 import { AdaptiveResolution, FrameWhilePaused, MAX_DPR, StatsProbe, statsEnabled, useRenderPaused } from '../perf';
 import { setOfficeCanvas, usePhotoGate } from '../photo/gate';
 import { repoOnFloor, useStore } from '../store';
-import { useA11y } from '../ui/a11y';
-import { ding, whoosh } from '../ui/sfx';
+import { reduceMotion, useA11y } from '../ui/a11y';
+import { beginRide, useRide } from '../ui/ElevatorRide';
+import { elevatorChime, whoosh } from '../ui/sfx';
 import { Batches } from './Batched';
 import { CameraRig } from './camera/CameraRig';
+import { CinemaCamera } from './camera/CinemaCamera';
+import { storeyOf } from './camera/cinemaPaths';
 import { Chatter } from './Chatter';
 import { CUT_PLANES } from './camera/rig';
 import { lobbyColliders, officeColliders, ROOF, roofColliders } from './layout';
@@ -37,22 +40,32 @@ const Roof = lazy(loadRoof);
 // Photo mode's camera and drawing load the first time it's opened.
 const PhotoScene = lazy(() => import('../photo/PhotoScene'));
 
+/** The elevator ride's timing (ui/ElevatorRide.tsx draws it): doors shut, the shaft, the chime, doors open. */
 function Travel() {
   const travel = useStore((s) => s.travel);
   const finish = useStore((s) => s.finishTravel);
   useEffect(() => {
-    if (!travel) return;
-    if (travel.phase === 'closing') whoosh(0.75);
-    const t = setTimeout(
-      () => {
-        if (travel.phase === 'closing') {
+    if (!travel) {
+      useRide.setState({ ride: null });
+      return;
+    }
+    const timers: ReturnType<typeof setTimeout>[] = [];
+    if (travel.phase === 'closing') {
+      const s = useStore.getState();
+      const top = s.repos.reduce((m, r) => Math.max(m, r.floor), 0);
+      const from = s.floor;
+      const plan = beginRide(from, travel.to, top, reduceMotion());
+      const up = storeyOf(travel.to, top) > storeyOf(from, top);
+      if (plan.rideMs) timers.push(setTimeout(() => whoosh(plan.rideMs / 1000 + 0.25), plan.closeMs * 0.7));
+      else whoosh(0.75);
+      timers.push(
+        setTimeout(() => {
           finish('arrived');
-          ding();
-        } else finish('done');
-      },
-      travel.phase === 'closing' ? 750 : 650,
-    );
-    return () => clearTimeout(t);
+          elevatorChime(up);
+        }, plan.closeMs + plan.rideMs),
+      );
+    } else timers.push(setTimeout(() => finish('done'), useRide.getState().ride?.timing.openMs ?? 650));
+    return () => timers.forEach(clearTimeout);
   }, [travel, finish]);
   return null;
 }
@@ -129,6 +142,7 @@ export function Game() {
       <Presence />
       <FieldOfView />
       <CameraRig />
+      <CinemaCamera />
       <Travel />
       <SoundListener />
       <Soundscape kind={onRoof ? 'roof' : isOffice ? 'office' : 'lobby'} repoId={repo?.id ?? null} />

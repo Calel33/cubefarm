@@ -19,6 +19,7 @@ describe('parseA11yPrefs', () => {
       cameraShake: false,
       reduceMotion: 'on',
       centerDot: true,
+      skipIntro: true,
       uiScale: 135,
       readableFont: true,
       highContrast: true,

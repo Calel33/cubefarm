@@ -133,7 +133,9 @@ Client (`client/`, Vite root; React 19, R3F, drei, zustand):
   the time of day (`sky/time.ts`, `sky/useDayTime.ts`) and the city outside (`outside/`: the seeded layout in
   `cityLayout.ts`, drawn by `City.tsx` in six instanced draw calls), the camera's other views (`camera/`: the
   overview, the building view and the follow cam in `rig.ts`, pose maths in `cameraMath.ts`, the cutaway as global
-  clipping planes), the gamepad (`gamepad.ts`) and the graphics tiers (`gfx/`: Low/Medium/High/Auto in `quality.ts`
+  clipping planes; the cinema in `cinema.ts`: the start screen's orbit with its lit windows, the arrival flyover, the
+  away screensaver, `window.__swarmCinema`; its paths and the elevator ride's timing pure in `cinemaPaths.ts`), the
+  gamepad (`gamepad.ts`) and the graphics tiers (`gfx/`: Low/Medium/High/Auto in `quality.ts`
   with Auto's governor, post-processing in a lazy chunk (`Effects.tsx`, `pipeline.ts`); a material blooms only if
   `bloomMarks.ts` marks it), the other people viewing the office (`presence/`: visitors, pings, the profile),
   holiday themes (`themes/`: which one is on from `shared/themes.ts`, their data and decoration slots in `themes.ts`

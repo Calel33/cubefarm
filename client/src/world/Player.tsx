@@ -31,6 +31,7 @@ import { bindings, keyName, useControls } from '../ui/controls';
 import { actionsForKey, anyHeld, isBound, type ActionId, type Scope } from '../ui/keymap';
 import { lookCurve, pad, padName, pollPad, wasPressed, wasReleased, watchPads } from './gamepad';
 import { arriveOnFloor, cameraMode, exitView, homeSpot, lookAllowed, playerAt, rigInput, rigOwnsCamera, rotateView, setHomeLook, stepRig, tapView } from './camera/rig';
+import { bindPlayer, cinemaOwnsCamera } from './camera/cinema';
 import { leavePerch, perch, takePerchTurn, type Perch } from './perch';
 import { roofAction } from './roof/roofState';
 import { greet } from './Chatter';
@@ -229,6 +230,16 @@ export function Player({ colliders, floor }: { colliders: Rect[]; floor: number 
   }, [floor, camera]);
   const lastSave = useRef(0);
 
+  // The intro ends with you standing where it landed (camera/cinema.ts).
+  useEffect(() => {
+    bindPlayer((x, z, yaw, pitch) => {
+      camera.position.set(x, EYE_HEIGHT, z);
+      look.current = { yaw, pitch };
+      arriveOnFloor({ x, z, yaw, pitch });
+    });
+    return () => bindPlayer(null);
+  }, [camera]);
+
   useEffect(() => {
     if (!import.meta.env.DEV) return;
     // Dev helper for inspecting views without pointer lock: __swarmCam(x, z, yawDeg, pitchDeg)
@@ -246,6 +257,7 @@ export function Player({ colliders, floor }: { colliders: Rect[]; floor: number 
     const onMouseDown = (e: MouseEvent) => {
       if (e.button !== 0 || photoActive()) return; // photo mode has the mouse (photo/PhotoScene.tsx)
       if (document.pointerLockElement !== gl.domElement) return requestLook();
+      if (cinemaOwnsCamera()) return; // the intro or the screensaver: the click just skips or wakes it
       const s = useStore.getState();
       if (!s.started || s.overlay || s.travel || isConfirmOpen()) return;
       // The coffee machine takes a click with your hands full (that's how the mug goes in), and a decoration goes where you click.
@@ -269,7 +281,7 @@ export function Player({ colliders, floor }: { colliders: Rect[]; floor: number 
       useStore.getState().setLocked(locked);
     };
     const onMove = (e: MouseEvent) => {
-      if (document.pointerLockElement !== gl.domElement || !document.hasFocus() || photoActive()) return;
+      if (document.pointerLockElement !== gl.domElement || !document.hasFocus() || photoActive() || cinemaOwnsCamera()) return;
       const d = filterLookDelta(lookFilter, e.movementX, e.movementY, e.timeStamp);
       lookDiag.dropped = lookFilter.dropped;
       lookDiag.skipped = lookFilter.skipped;
@@ -292,6 +304,7 @@ export function Player({ colliders, floor }: { colliders: Rect[]; floor: number 
       }
       if (s.overlay || !s.started || isConfirmOpen() || photoActive()) return;
       keys.current.add(e.code);
+      if (cinemaOwnsCamera()) return; // the screensaver on its way back: held keys walk once you're there
       const mode = cameraMode();
       if (e.code === 'Escape' && mode !== 'first') return exitView();
       // Perched (a deck chair, the telescope): walking, Space or the use key gets you up, though with food in hand it still eats.
@@ -420,6 +433,13 @@ export function Player({ colliders, floor }: { colliders: Rect[]; floor: number 
     const s = useStore.getState();
     if (s.overlay || isConfirmOpen()) keys.current.clear();
     pollPad(performance.now());
+    // the intro or the screensaver has the camera (camera/cinema.ts): you stand still
+    if (cinemaOwnsCamera()) {
+      walk.x = 0;
+      walk.z = 0;
+      if (s.focus) s.setFocus(null);
+      return;
+    }
     padButtons();
 
     // movement: the keys, plus the left stick (which walks slower when pushed less far); L3 runs until you stop

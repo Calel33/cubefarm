@@ -1000,6 +1000,209 @@ input.inline:focus {
   font-size: 3rem;
   font-weight: 700;
 }
+/* ---------- the elevator ride (ui/ElevatorRide.tsx) ---------- */
+.ride {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+.ride-door {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 50.5%;
+  background:
+    linear-gradient(90deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0) 30%, rgba(0, 0, 0, 0.18)),
+    repeating-linear-gradient(90deg, #8d93a3 0 2px, #9aa0b0 2px 7px),
+    #969cab;
+  box-shadow: inset 0 0 0 4px #5c6070;
+}
+.ride-door-l {
+  left: 0;
+}
+.ride-door-r {
+  right: 0;
+  transform: scaleX(-1);
+}
+.ride-closing .ride-door-l {
+  animation: ride-shut-l var(--ride-close) cubic-bezier(0.55, 0, 0.35, 1) both;
+}
+.ride-closing .ride-door-r {
+  animation: ride-shut-r var(--ride-close) cubic-bezier(0.55, 0, 0.35, 1) both;
+}
+.ride-opening .ride-door-l {
+  animation: ride-shut-l var(--ride-open) cubic-bezier(0.55, 0, 0.35, 1) reverse both;
+}
+.ride-opening .ride-door-r {
+  animation: ride-shut-r var(--ride-open) cubic-bezier(0.55, 0, 0.35, 1) reverse both;
+}
+@keyframes ride-shut-l {
+  from {
+    transform: translateX(-101%);
+  }
+  to {
+    transform: none;
+  }
+}
+@keyframes ride-shut-r {
+  from {
+    transform: translateX(101%) scaleX(-1);
+  }
+  to {
+    transform: scaleX(-1);
+  }
+}
+/* the doors' window onto the shaft, once they're shut */
+.ride-window {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: min(220px, 30vw);
+  height: min(380px, 52vh);
+  transform: translate(-50%, -46%);
+  border: 6px solid #4a4e5c;
+  border-radius: 14px;
+  overflow: hidden;
+  opacity: 0;
+  box-shadow: 0 0 0 3px #b9bfcc, inset 0 0 30px rgba(0, 0, 0, 0.8);
+}
+.ride-closing .ride-window {
+  animation: ride-show 180ms ease-out var(--ride-close) both;
+}
+.ride-shaft {
+  position: absolute;
+  inset: -200px 0;
+  background:
+    linear-gradient(90deg, rgba(0, 0, 0, 0.6), rgba(0, 0, 0, 0) 25%, rgba(0, 0, 0, 0) 75%, rgba(0, 0, 0, 0.6)),
+    repeating-linear-gradient(180deg, #2a2933 0 150px, #d8d0bf 150px 168px, #ffe3a3 168px 172px, #2a2933 172px 200px);
+}
+.ride-up .ride-shaft {
+  animation: ride-pass-up 420ms linear infinite;
+}
+.ride-down .ride-shaft {
+  animation: ride-pass-down 420ms linear infinite;
+}
+@keyframes ride-pass-up {
+  from {
+    transform: translateY(0);
+  }
+  to {
+    transform: translateY(200px);
+  }
+}
+@keyframes ride-pass-down {
+  from {
+    transform: translateY(200px);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+.ride-panel {
+  position: absolute;
+  left: 50%;
+  top: max(24px, calc(50% - min(190px, 26vh) - 74px));
+  transform: translateX(-50%);
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding: 6px 18px;
+  border: 4px solid #4a4e5c;
+  border-radius: 12px;
+  background: #15141c;
+  color: #ffb347;
+  font: 700 2.4rem/1 ui-monospace, 'Cascadia Mono', Consolas, monospace;
+  text-shadow: 0 0 10px rgba(255, 179, 71, 0.8);
+  opacity: 0;
+}
+.ride-arrow {
+  font-size: 1.4rem;
+}
+.ride-closing .ride-panel {
+  animation: ride-show 200ms ease-out calc(var(--ride-close) * 0.6) both;
+}
+.ride-opening .ride-panel,
+.ride-opening .ride-name {
+  animation: ride-show 200ms ease-in reverse both;
+}
+.ride-name {
+  position: absolute;
+  left: 50%;
+  bottom: max(24px, 12vh);
+  transform: translateX(-50%);
+  padding: 6px 16px;
+  border-radius: 999px;
+  background: rgba(21, 20, 28, 0.85);
+  color: #fffdf6;
+  font-weight: 700;
+  font-size: 1.15rem;
+  white-space: nowrap;
+  opacity: 0;
+}
+.ride-closing .ride-name {
+  animation: ride-show 200ms ease-out calc(var(--ride-close) * 0.6) both;
+}
+@keyframes ride-show {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+/* the new floor's light spilling in as the doors open */
+.ride-light {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at 50% 55%, rgba(255, 244, 214, 0.75), rgba(255, 226, 170, 0.35) 60%, rgba(255, 226, 170, 0));
+  opacity: 0;
+}
+.ride-opening .ride-light {
+  animation: ride-show var(--ride-open) ease-out reverse both;
+}
+/* ---------- the cinematic arrival (world/camera/cinema.ts) ---------- */
+.cine-veil {
+  position: fixed;
+  inset: 0;
+  z-index: 49;
+  background: #15151f;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  pointer-events: none;
+}
+.cine-veil-on {
+  opacity: 1;
+}
+.cine-hint {
+  position: fixed;
+  left: 50%;
+  bottom: 28px;
+  transform: translateX(-50%);
+  z-index: 49;
+  padding: 6px 14px;
+  border-radius: 999px;
+  background: rgba(21, 20, 28, 0.6);
+  color: #fffdf6;
+  font-size: 0.95rem;
+  pointer-events: none;
+  animation: ride-show 600ms ease-out 400ms both;
+}
+.hud-intro {
+  opacity: 0;
+  visibility: hidden;
+}
+.hud {
+  transition:
+    opacity 0.5s ease,
+    visibility 0.5s;
+}
+.hud-away .crosshair,
+.hud-away .hud-hint,
+.hud-away .hud-resume,
+.hud-away .hud-help {
+  display: none;
+}
 .toasts {
   position: absolute;
   bottom: 16px;
@@ -1043,8 +1246,17 @@ input.inline:focus {
   display: grid;
   place-items: center;
   padding: 16px;
-  background: radial-gradient(circle at 30% 20%, rgba(255, 214, 165, 0.75), rgba(116, 192, 252, 0.8));
-  backdrop-filter: blur(6px);
+  /* the tower orbits behind the card (world/camera/cinema.ts): a soft wash on the card's side, clear on the other */
+  background: linear-gradient(100deg, rgba(255, 214, 165, 0.55), rgba(116, 192, 252, 0.22) 55%, rgba(116, 192, 252, 0) 80%);
+}
+@media (min-width: 1100px) {
+  .start {
+    place-items: center start;
+    padding-left: max(32px, 6vw);
+  }
+  .start-card {
+    width: min(560px, 100%);
+  }
 }
 .start-card {
   width: min(640px, 100%);

@@ -8,7 +8,7 @@ import { resetA11y, setA11y, useA11y } from './a11y';
 import { DEFAULT_A11Y, LIMITS, reducesMotion, showsShapes, type A11yPrefs, type ReduceMotion } from './a11yPrefs';
 import { KIND_ICON, KIND_WORD, kindStrong, PALETTE_LABELS, PALETTES, STATUS_KINDS, type Palette } from './statusLook';
 
-function Toggle({ k, children, hint, disabled }: { k: 'captions' | 'statusShapes' | 'headBob' | 'cameraShake' | 'centerDot' | 'readableFont' | 'highContrast'; children: ReactNode; hint?: string; disabled?: boolean }) {
+function Toggle({ k, children, hint, disabled }: { k: 'captions' | 'statusShapes' | 'headBob' | 'cameraShake' | 'centerDot' | 'skipIntro' | 'readableFont' | 'highContrast'; children: ReactNode; hint?: string; disabled?: boolean }) {
   const on = useA11y((s) => s.prefs[k]);
   const hintId = useId();
   return (
@@ -119,12 +119,15 @@ export function AccessibilitySettings({ pocket = false }: { pocket?: boolean }) 
               </label>
             ))}
             <p className="muted small">
-              Reduced motion: confetti bursts become a glow, the elevator doors cut to a fade, and panels, toasts and badges appear without moving.{' '}
+              Reduced motion: confetti bursts become a glow, the arrival flyover, the elevator ride and the away screensaver cut to fades, and panels, toasts and badges appear without moving.{' '}
               {reducesMotion(prefs.reduceMotion, systemReduced) ? 'On now.' : 'Off now.'}
             </p>
           </fieldset>
           <Toggle k="centerDot" hint="A dot fixed in the middle of the view, which helps some people with motion sickness.">
             Centre dot
+          </Toggle>
+          <Toggle k="skipIntro" hint="Entering the office glides to where you left off in a second, instead of the flyover from the street on your first visit of the day.">
+            Skip intro
           </Toggle>
         </section>
       )}
