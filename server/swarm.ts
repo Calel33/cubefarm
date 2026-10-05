@@ -1961,7 +1961,8 @@ export class Swarm {
     };
     this.state.agents.push(agent);
     applyLedger(this.state.progress, { kind: 'hired', agentId: agent.id, at: Date.now() });
-    this.news.note({ at: Date.now(), kind: 'hired', floor: repo.floor, repoId: repo.id, repo: repo.fullName.split('/')[1], who: name, whoId: agent.id, ...(agent.title ? { detail: agent.title } : {}) });
+    // the founding team (a fresh demo, or a floor's first QA tester at startup) isn't news
+    if (this.news.running) this.news.note({ at: Date.now(), kind: 'hired', floor: repo.floor, repoId: repo.id, repo: repo.fullName.split('/')[1], who: name, whoId: agent.id, ...(agent.title ? { detail: agent.title } : {}) });
     this.agentRt.set(agent.id, { log: [], session: null, currentTool: null, browserUrl: null, screenshot: null, shots: [], terminal: null });
     this.appendLog(agent, [
       { kind: 'system', text: role === 'qa' ? `🔍 ${name} joined the QA lab on floor ${repo.floor} (${repo.fullName}).` : `👋 ${name} joined floor ${repo.floor} (${repo.fullName}).` },
@@ -3652,7 +3653,7 @@ export class Swarm {
   private enqueueCeo(job: CeoJob) {
     const q = this.state.ceo.queue;
     if (job.kind === 'plan' && q.some((j) => j.kind === 'onboard' && j.repoId === job.repoId)) return; // onboarding plans from the brief too
-    const same = q.findIndex((j) => j.kind === job.kind && (job.kind === 'review' || job.kind === 'chat' || (j.repoId === job.repoId && j.prNumber === job.prNumber)));
+    const same = q.findIndex((j) => j.kind === job.kind && (job.kind === 'review' || job.kind === 'chat' || (j.repoId === job.repoId && j.prNumber === job.prNumber && j.edition === job.edition)));
     if (same >= 0) q[same] = job.kind === 'chat' ? { ...q[same], text: `${q[same].text}\n${job.text}` } : job;
     else q.push(job);
     this.emitCeo();

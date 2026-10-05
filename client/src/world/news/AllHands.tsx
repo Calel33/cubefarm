@@ -11,7 +11,7 @@ import { CEO_ID } from '../../../../shared/types';
 import { reportAllHands, useEdition } from '../../news';
 import { officeNow } from '../../officeTime';
 import { useRenderPaused } from '../../perf';
-import { useStore, type Agent } from '../../store';
+import { qaKey, useStore, type Agent } from '../../store';
 import { noise } from '../../ui/sfx';
 import { speakLine } from '../../ui/voicePlayback';
 import { qaShotUrl } from '../../ui/channels';
@@ -75,7 +75,8 @@ function useSlides(ah: AllHandsView | null): Slide[] {
 /** A QA screenshot of the slide's PR, when the office still has one. */
 function useShot(slide: Slide | undefined) {
   const [img, setImg] = useState<HTMLImageElement | null>(null);
-  const url = slide?.shot ? qaShotUrl(slide.shot.repoId, slide.shot.pr, 0, 0) : null;
+  const rec = useStore((s) => (slide?.shot ? s.qa[qaKey(slide.shot.repoId, slide.shot.pr)] : undefined));
+  const url = slide?.shot && rec?.shots?.length ? qaShotUrl(slide.shot.repoId, slide.shot.pr, 0, rec.updatedAt) : null;
   useEffect(() => {
     setImg(null);
     if (!url) return;

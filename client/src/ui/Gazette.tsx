@@ -58,7 +58,7 @@ export function Gazette({ id }: { id?: string }) {
   const print = (kind: 'daily' | 'weekly') => void api.newsGenerate(kind).then((s) => setPicked(s.id)).catch(() => undefined);
 
   return (
-    <Panel title={`📰 The ${company} Gazette`} wide className="gazette-panel" accent="#2b2d42">
+    <Panel title={`📰 The ${company} Gazette`} wide className="gazette-panel">
       <div className="gazette">
         <div className="gazette-paper" aria-live="polite">
           {!e ? (

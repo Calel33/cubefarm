@@ -177,6 +177,11 @@ export class NewsDesk {
     }
   }
 
+  /** The minute check runs: the office is up (what happens before that, like the demo's founding team, isn't news). */
+  get running() {
+    return this.timer !== null;
+  }
+
   view(): NewsView {
     return { editions: this.list().slice(0, VIEW_EDITIONS), writing: this.writing, allHands: this.allHands };
   }

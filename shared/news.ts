@@ -433,7 +433,7 @@ export function fallbackEdition(x: EditionInput): NewsEdition {
     kind: x.kind,
     from: x.from,
     to: x.to,
-    dateline: dateline(x.kind, x.from),
+    dateline: dateline(x.kind, x.kind === 'daily' ? x.to - 1 : x.from),
     publishedAt: x.now,
     writer: 'template',
     headline,

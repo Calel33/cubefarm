@@ -94,6 +94,8 @@ if (typeof window !== 'undefined' && !Object.getOwnPropertyDescriptor(window, '_
         const a = useStore.getState().news.allHands;
         return a ? { ...a, ...allHandsAt(a, officeNow()), lobby: shown } : null;
       },
+      /** Opens the Gazette (an edition, default the newest), as E on a newspaper does. */
+      open: (id?: string) => useStore.getState().openOverlay({ kind: 'gazette', id }),
       startAllHands: () => api.allHands('start'),
       stopAllHands: () => api.allHands('stop'),
     },
