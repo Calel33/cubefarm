@@ -131,7 +131,10 @@ Client (`client/`, Vite root; React 19, R3F, drei, zustand):
   errands (`toyErrands.ts`: hoops and catch, on `toys/npc.ts`, the toys' hands for people, aimed by `toys/npcAim.ts`),
   comings and goings (`socials.ts`: hires by elevator, leavers with a box, chats, visits, the CEO's stroll),
   the time of day (`sky/time.ts`, `sky/useDayTime.ts`) and the city outside (`outside/`: the seeded layout in
-  `cityLayout.ts`, drawn by `City.tsx` in six instanced draw calls), the camera's other views (`camera/`: the
+  `cityLayout.ts`, drawn by `City.tsx` in six instanced draw calls), the street round the lobby (`street/`, a lazy
+  chunk mounted in the lobby: the plaza's layout and colliders in `plaza.ts`, the bus's timetable and the crossings in
+  `bus.ts`, passers-by, pigeons, the food truck and headlines in `streetRules.ts`, lunch out in `lunchOut.ts`;
+  `__swarmStreet`), the camera's other views (`camera/`: the
   overview, the building view and the follow cam in `rig.ts`, pose maths in `cameraMath.ts`, the cutaway as global
   clipping planes), the gamepad (`gamepad.ts`) and the graphics tiers (`gfx/`: Low/Medium/High/Auto in `quality.ts`
   with Auto's governor, post-processing in a lazy chunk (`Effects.tsx`, `pipeline.ts`); a material blooms only if

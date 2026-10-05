@@ -238,6 +238,7 @@ export function Player({ colliders, floor }: { colliders: Rect[]; floor: number 
   // The street's probe (__swarmStreet.stand) stands you somewhere, for QA and screenshots.
   useEffect(() => {
     setPlayerPlacer((x, z, yaw, pitch) => {
+      perched.current = null; // up from a perch just now: stand here, not at its exit
       camera.position.set(x, EYE_HEIGHT, z);
       look.current = { yaw, pitch };
     });

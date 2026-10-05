@@ -72,13 +72,14 @@ export function Park() {
     const dt = Math.min(delta, 0.1);
     const t = performance.now() / 1000;
     const quiet = !!useStore.getState().overlay || !!useStore.getState().travel;
+    const near = Math.hypot(camera.position.x - FOUNTAIN.x, camera.position.z - FOUNTAIN.z) < 14; // plinks only close by
 
     // the drops: each on its own arc from the top bowl's lip down into the basin
     const d = drops.current;
     if (d) {
       for (let i = 0; i < DROPS; i++) {
         const k = (t * 0.8 + i / DROPS + (i % 3) * 0.13) % 1;
-        if (k < run.wrap[i] && !quiet && i % 4 === 0) plink({ x: FOUNTAIN.x, y: WATER_Y, z: FOUNTAIN.z });
+        if (k < run.wrap[i] && near && !quiet && i % 4 === 0) plink({ x: FOUNTAIN.x, y: WATER_Y, z: FOUNTAIN.z });
         run.wrap[i] = k;
         const a = (i / DROPS) * Math.PI * 2;
         const r = 0.55 + k * 0.85;

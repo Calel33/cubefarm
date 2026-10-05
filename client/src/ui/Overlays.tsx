@@ -275,6 +275,10 @@ function Help({ tab: initial }: { tab?: HelpTab }) {
             <Key action="interact" /> again takes it once it's done, then <Key action="interact" /> eats it a bite at a time), or look through the telescope (<Key action="interact" />; the mouse aims and the wheel zooms): the billboards on the rooftops by day, the moon and the
             constellations at night. The string lights come on at dusk. Idle teammates go up for a break now and then, and the CEO takes calls up there.
           </p>
+          <p>
+            The lobby's glass doors open onto the street. Out front there's a food truck (<Key action="interact" /> orders whatever's on today: tacos, bao or gelato, on the house; <Key action="interact" /> eats it a bite at a time),
+            the newsstand with the office's headlines, a pocket park with a fountain, pigeons and a tree to sit under (<Key action="interact" />), and a bus stop round the east side. Teammates pop out for lunch now and then.
+          </p>
           <h3>Mission control</h3>
           <p>
             The curved bank of screens behind reception shows the whole company at a glance: the pipeline (issues ready, being built, in QA, being fixed, ready to merge, needing you), merges today and over the

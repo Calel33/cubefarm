@@ -117,4 +117,28 @@ describe('instanced batches', () => {
     set.hook(renderer, scene, camera, box);
     expect(boxes.count).toBe(1);
   });
+
+  it("write the shadow pass's instances in the view's order, what it sees first, so a pass drawing the other's upload still draws the right parts", () => {
+    const { scene, set, stand } = office();
+    const l = look(box, { castShadow: true });
+    const behind = stand(scene, 0);
+    behind.position.z = 20; // first in the batch, but out of view
+    set.add(l, behind, '#f00');
+    set.add(l, stand(scene, 0), '#0f0');
+    const camera = new THREE.PerspectiveCamera(60, 1, 0.1, 100);
+    camera.position.z = 10;
+    scene.add(camera);
+    set.camera = camera;
+    scene.updateMatrixWorld();
+    camera.updateMatrixWorld();
+    const renderer = { info: { render: { frame: 1 } } } as THREE.WebGLRenderer;
+    set.hook(renderer, null, camera, new THREE.OrthographicCamera());
+    const [boxes] = batchMeshes(set);
+    expect(boxes.count).toBe(2);
+    const shadowPass = Array.from(boxes.instanceMatrix.array.slice(0, 32));
+    expect(at(boxes, 0).elements[14]).toBe(0); // the one in view comes first
+    set.hook(renderer, scene, camera, box);
+    expect(boxes.count).toBe(1);
+    expect(Array.from(boxes.instanceMatrix.array.slice(0, 32))).toEqual(shadowPass);
+  });
 });

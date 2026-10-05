@@ -194,8 +194,9 @@ export function FoodTruck() {
         <Box size={[0.04, 1.0, 1.8]} position={[HATCH.x + 0.005, HATCH.y, HATCH.z]} color="#3d2c22" shadow={false} />
         <Box size={[0.95, 0.06, 2.2]} position={[HATCH.x + 0.42, 2.42, HATCH.z]} rotation={[0, 0, -0.22]} color={STRIPE} outline />
         <Box size={[0.4, 0.06, 1.9]} position={[HATCH.x + 0.2, 1.22, HATCH.z]} color="#adb5bd" outline />
-        <Ball r={0.2} position={[HATCH.x - 0.4, 1.78, HATCH.z + 0.2]} color="#f4c7a1" />
-        <Cyl r={0.17} rTop={0.22} h={0.26} position={[HATCH.x - 0.4, 2.06, HATCH.z + 0.2]} color="#ffffff" />
+        <Box size={[0.3, 0.42, 0.5]} position={[HATCH.x - 0.12, 1.5, HATCH.z + 0.25]} color="#ffffff" shadow={false} />
+        <Ball r={0.19} position={[HATCH.x - 0.1, 1.9, HATCH.z + 0.25]} color="#f4c7a1" />
+        <Cyl r={0.16} rTop={0.21} h={0.24} position={[HATCH.x - 0.1, 2.17, HATCH.z + 0.25]} color="#ffffff" />
         <Cyl r={0.06} rTop={0.08} h={0.12} position={[HATCH.x + 0.25, 1.31, HATCH.z - 0.6]} color="#d62828" />
         <Cyl r={0.06} rTop={0.08} h={0.12} position={[HATCH.x + 0.25, 1.31, HATCH.z - 0.4]} color="#ffc93c" />
       </group>

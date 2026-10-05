@@ -17,20 +17,21 @@ const INK = '#1f1d2b';
 
 function Taco() {
   return (
-    <group rotation={[0, 0, Math.PI / 2]}>
-      {/* a folded shell: half a short, wide cylinder, open at the top */}
-      <mesh material={toon('#f2c14e')} rotation={[Math.PI / 2, 0, 0]}>
-        <cylinderGeometry args={[0.075, 0.075, 0.13, 16, 1, true, 0, Math.PI]} />
+    <group>
+      {/* the folded shell, side on: half a short tube pointing at you, its fold underneath */}
+      <mesh rotation={[Math.PI / 2, 0, 0]}>
+        <cylinderGeometry args={[0.075, 0.075, 0.06, 18, 1, true, Math.PI * 1.5, Math.PI]} />
+        <meshToonMaterial color="#f2c14e" side={THREE.DoubleSide} />
         <Outlines thickness={0.004} color={INK} />
       </mesh>
       {[
-        ['#80ed99', 0.03, 0.02],
-        ['#c1121f', -0.02, -0.01],
-        ['#ffd166', 0.0, 0.035],
-        ['#80ed99', -0.035, 0.03],
-      ].map(([c, y, z], i) => (
-        <mesh key={i} position={[0.045, y as number, z as number]} material={toon(c as string)}>
-          <sphereGeometry args={[0.025, 8, 6]} />
+        ['#80ed99', -0.045, 0.012],
+        ['#c1121f', -0.012, 0.004],
+        ['#ffd166', 0.02, 0.01],
+        ['#80ed99', 0.05, 0.006],
+      ].map(([c, x, y], i) => (
+        <mesh key={i} position={[x as number, y as number, 0]} material={toon(c as string)}>
+          <sphereGeometry args={[0.022, 8, 6]} />
         </mesh>
       ))}
     </group>
@@ -97,7 +98,7 @@ export function HeldFood() {
   return (
     <group ref={root} userData={FIRST_PERSON}>
       <group ref={hand}>
-        <group scale={1.15 * left}>
+        <group scale={0.85 * left}>
           <Look />
         </group>
       </group>

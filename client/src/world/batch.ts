@@ -7,7 +7,7 @@ import { toCreasedNormals } from 'three/examples/jsm/utils/BufferGeometryUtils.j
 // it still moves with its group, hides with it and is hit by the player's aim; the batch copies the stand-ins' world
 // matrices and colours into its instances just before drawing, after three.js has updated the scene's matrices for the
 // frame, without allocating. As three.js culls whole meshes, a batch leaves out the instances outside the view (in
-// the shadow pass, none: shadows may fall from out of view). Outlines are left off parts beyond `outlineRange`. A geometry with morph
+// the shadow pass, none: shadows may fall from out of view; they go after the rest, so both passes agree). Outlines are left off parts beyond `outlineRange`. A geometry with morph
 // targets (a face) gets each instance's weights from its stand-in's morphTargetInfluences.
 
 /** Cel-shaded like toon(), or unlit like glow() (glowNight: one that blooms only after dark, gfx/bloomMarks.ts). */
@@ -79,6 +79,8 @@ class Batch {
   mesh: THREE.InstancedMesh;
   outline: THREE.InstancedMesh | null = null;
   slots: Slot[] = [];
+  /** The slots a sync left out of view, kept for after the rest (reused, so syncing allocates nothing). */
+  private culled: Slot[] = [];
   private outlineGeometry: THREE.BufferGeometry | null = null;
 
   constructor(
@@ -144,17 +146,19 @@ class Batch {
     this.slots.pop();
   }
 
-  sync(eye: THREE.Vector3 | null, range2: number, frustum: THREE.Frustum | null) {
+  /**
+   * Copies the stand-ins into the instances: those in `frustum` first, then (with `all`, for the shadow pass) the rest
+   * after them. Both passes of a frame write the same order and only the count differs, as three.js uploads a batch's
+   * buffers once a frame, whichever pass comes first: the view draws the first `count` of what was uploaded.
+   */
+  sync(eye: THREE.Vector3 | null, range2: number, frustum: THREE.Frustum | null, all = false) {
     const m = this.mesh;
     const bounds = this.look.geometry.boundingSphere ?? (this.look.geometry.computeBoundingSphere(), this.look.geometry.boundingSphere!);
     const { x: cx, y: cy, z: cz } = bounds.center;
-    const mats = m.instanceMatrix.array as Float32Array;
-    const cols = m.instanceColor!.array as Float32Array;
     const o = this.outline;
     const omats = o ? (o.instanceMatrix.array as Float32Array) : null;
-    const morph = m.morphTexture ? (m.morphTexture.image.data as Float32Array) : null;
-    const len = morph ? m.morphTexture!.image.width : 0;
-    const relative = this.look.geometry.morphTargetsRelative;
+    const culled = this.culled;
+    culled.length = 0;
     let n = 0;
     let k = 0;
     for (const s of this.slots) {
@@ -164,24 +168,12 @@ class Batch {
         // the part's bounds where it stands, as three's own culling would test a mesh
         sphere.center.set(e[0] * cx + e[4] * cy + e[8] * cz + e[12], e[1] * cx + e[5] * cy + e[9] * cz + e[13], e[2] * cx + e[6] * cy + e[10] * cz + e[14]);
         sphere.radius = bounds.radius * Math.sqrt(Math.max(e[0] * e[0] + e[1] * e[1] + e[2] * e[2], e[4] * e[4] + e[5] * e[5] + e[6] * e[6], e[8] * e[8] + e[9] * e[9] + e[10] * e[10]));
-        if (!frustum.intersectsSphere(sphere)) continue;
-      }
-      mats.set(e, n * 16);
-      cols[n * 3] = s.color.r;
-      cols[n * 3 + 1] = s.color.g;
-      cols[n * 3 + 2] = s.color.b;
-      if (morph) {
-        // as InstancedMesh.setMorphAt writes them: the base weight, then each target's
-        const w = (s.obj as THREE.Mesh).morphTargetInfluences;
-        let sum = 0;
-        for (let i = 1; i < len; i++) {
-          const v = w?.[i - 1] ?? 0;
-          morph[n * len + i] = v;
-          sum += v;
+        if (!frustum.intersectsSphere(sphere)) {
+          if (all) culled.push(s);
+          continue;
         }
-        morph[n * len] = relative ? 1 : 1 - sum;
       }
-      n++;
+      this.write(s, n++);
       if (omats) {
         const dx = e[12] - (eye?.x ?? e[12]);
         const dy = e[13] - (eye?.y ?? e[13]);
@@ -189,13 +181,40 @@ class Batch {
         if (dx * dx + dy * dy + dz * dz <= range2) omats.set(e, k++ * 16);
       }
     }
-    m.count = n;
+    const seen = n;
+    for (const s of culled) this.write(s, n++);
+    culled.length = 0;
+    m.count = all ? n : seen;
     m.instanceMatrix.needsUpdate = true;
     m.instanceColor!.needsUpdate = true;
     if (m.morphTexture) m.morphTexture.needsUpdate = true;
     if (o) {
       o.count = k;
       o.instanceMatrix.needsUpdate = true;
+    }
+  }
+
+  /** Slot `s` into instance `i`: its world matrix, colour and morph weights. */
+  private write(s: Slot, i: number) {
+    const m = this.mesh;
+    const mats = m.instanceMatrix.array as Float32Array;
+    mats.set(s.obj.matrixWorld.elements, i * 16);
+    const cols = m.instanceColor!.array as Float32Array;
+    cols[i * 3] = s.color.r;
+    cols[i * 3 + 1] = s.color.g;
+    cols[i * 3 + 2] = s.color.b;
+    if (m.morphTexture) {
+      // as InstancedMesh.setMorphAt writes them: the base weight, then each target's
+      const morph = m.morphTexture.image.data as Float32Array;
+      const len = m.morphTexture.image.width;
+      const w = (s.obj as THREE.Mesh).morphTargetInfluences;
+      let sum = 0;
+      for (let j = 1; j < len; j++) {
+        const v = w?.[j - 1] ?? 0;
+        morph[i * len + j] = v;
+        sum += v;
+      }
+      morph[i * len] = this.look.geometry.morphTargetsRelative ? 1 : 1 - sum;
     }
   }
 
@@ -236,7 +255,9 @@ export class BatchSet {
     const key = `${renderer.info.render.frame}:${shadow ? 'shadow' : camera.id}`;
     if (key === this.synced) return;
     this.synced = key;
-    this.sync(shadow ? null : camera);
+    // shadows: everything, in the order the viewer's camera will want it (what it sees first), so both passes agree
+    if (shadow) this.sync(this.camera, true);
+    else this.sync(camera);
   };
 
   /** Draws `obj` (an invisible stand-in placed in the scene) as an instance of `look`, in `color`. */
@@ -255,12 +276,15 @@ export class BatchSet {
     };
   }
 
-  /** Copies every stand-in's world matrix and colour into its batch: only those `view` can see, when given. */
-  sync(view: THREE.Camera | null = null) {
+  /**
+   * Copies every stand-in's world matrix and colour into its batch: only those `view` can see, when given; with `all`
+   * the rest too, after them.
+   */
+  sync(view: THREE.Camera | null = null, all = false) {
     const eye = this.camera ? this.eye.setFromMatrixPosition(this.camera.matrixWorld) : null;
     const range2 = this.outlineRange * this.outlineRange;
     const frustum = view ? this.frustum.setFromProjectionMatrix(viewProjection.multiplyMatrices(view.projectionMatrix, view.matrixWorldInverse)) : null;
-    for (const b of this.batches.values()) b.sync(eye, range2, frustum);
+    for (const b of this.batches.values()) b.sync(eye, range2, frustum, all);
   }
 
   /** How many batches and drawn instances there are (window.__swarmBatches). */

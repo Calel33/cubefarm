@@ -58,9 +58,8 @@ const probe = {
   get sitting() {
     return perch()?.id === 'street-tree';
   },
-  /** Stands you at (x, z) in the lobby or out on the plaza, looking yawDeg (0 north, 90 west) and pitchDeg up. */
+  /** Stands you at (x, z) on the floor you're on (out on the plaza in the lobby), looking yawDeg (0 north, 90 west) and pitchDeg up. */
   stand(x: number, z: number, yawDeg = 0, pitchDeg = 0) {
-    if (useStore.getState().floor !== 0) return false;
     leavePerch();
     placer?.(x, z, rad(yawDeg), rad(pitchDeg));
     return true;

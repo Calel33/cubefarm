@@ -5,7 +5,7 @@ import { ding } from '../../ui/sfx';
 import { HURRY_SPEED, isFree, nextWaypoint } from '../errands';
 import type { Gesture } from '../body';
 import { Character } from '../Character';
-import { HALF_D } from '../layout';
+import { HALF_D, HALF_W } from '../layout';
 import { bodyState, placeBody, say, seatBody, setBody, setHandFood } from '../people';
 import { CABIN, DOORS_SECONDS } from '../socials';
 import type { Pt } from '../toys/roombaBrain';
@@ -106,7 +106,9 @@ export function LunchPeople() {
   const goHome = (w: Walker, from: Pt, hurry: boolean) => {
     w.stage = 'back';
     w.hurry = hurry;
-    w.path = [...walkIn(from), ...lobbyPath(INSIDE.west, LIFT), CABIN];
+    // still indoors (called back before they got out of the door): straight back to the lift
+    const inside = Math.abs(from.x) < HALF_W && from.z < HALF_D + 2;
+    w.path = inside ? [...lobbyPath(from, LIFT), CABIN] : [...walkIn(from), ...lobbyPath(INSIDE.west, LIFT), CABIN];
     w.wp = 0;
     say(w.id, null);
     if (hurry) updateLunch(w.id, { leave: Date.now() });
