@@ -5,10 +5,12 @@ import { toCreasedNormals } from 'three/examples/jsm/utils/BufferGeometryUtils.j
 // shapes in different colours, so each shape, however many there are of it, costs one draw call (and one for its ink
 // outline, one in the shadow pass). Every part keeps an invisible stand-in mesh where it always was in the scene, so
 // it still moves with its group, hides with it and is hit by the player's aim; the batch copies the stand-ins' world
-// matrices and colours into its instances just before drawing, after three.js has updated the scene's matrices for the
-// frame, without allocating. As three.js culls whole meshes, a batch leaves out the instances outside the view (in
-// the shadow pass, none: shadows may fall from out of view; they go after the rest, so both passes agree). Outlines are left off parts beyond `outlineRange`. A geometry with morph
-// targets (a face) gets each instance's weights from its stand-in's morphTargetInfluences.
+// matrices and colours into its instances at the start of every render of the scene (Batched.tsx), after three.js has
+// updated the scene's matrices and before it uploads anything, without allocating. Every pass of that render (the
+// shadows, the view, post-processing's extra ones) draws the same instances: three.js uploads an instanced mesh's
+// buffers once a render, at the first pass that draws it, so data changed between passes would reach the screen a
+// pass late, in the wrong slots. Outlines are left off parts beyond `outlineRange`. A geometry with morph targets (a
+// face) gets each instance's weights from its stand-in's morphTargetInfluences.
 
 /** Cel-shaded like toon(), or unlit like glow() (glowNight: one that blooms only after dark, gfx/bloomMarks.ts). */
 export type Shading = 'toon' | 'glow' | 'glowNight';
@@ -59,9 +61,6 @@ interface Slot {
   color: THREE.Color;
 }
 
-const sphere = new THREE.Sphere();
-const viewProjection = new THREE.Matrix4();
-
 /** Shown when it and every group above it are (the stand-in itself is never drawn, so its own flag doesn't count). */
 function shown(obj: THREE.Object3D) {
   let p = obj.parent;
@@ -79,8 +78,6 @@ class Batch {
   mesh: THREE.InstancedMesh;
   outline: THREE.InstancedMesh | null = null;
   slots: Slot[] = [];
-  /** The slots a sync left out of view, kept for after the rest (reused, so syncing allocates nothing). */
-  private culled: Slot[] = [];
   private outlineGeometry: THREE.BufferGeometry | null = null;
 
   constructor(
@@ -105,7 +102,6 @@ class Batch {
     m.frustumCulled = false; // it spans the floor; the bounds of the instances would need working out every frame
     m.matrixAutoUpdate = false;
     m.raycast = () => undefined; // the stand-ins are what the player's aim hits
-    m.onBeforeShadow = m.onBeforeRender = this.set.hook;
     const morphs = this.look.geometry.morphAttributes.position?.length ?? 0;
     if (morphs) m.morphTexture = new THREE.DataTexture(new Float32Array((morphs + 1) * capacity), morphs + 1, capacity, THREE.RedFormat, THREE.FloatType);
     this.set.root.add(m);
@@ -119,7 +115,6 @@ class Batch {
     o.frustumCulled = false;
     o.matrixAutoUpdate = false;
     o.raycast = () => undefined;
-    o.onBeforeRender = this.set.hook;
     this.set.root.add(o);
     return o;
   }
@@ -146,34 +141,36 @@ class Batch {
     this.slots.pop();
   }
 
-  /**
-   * Copies the stand-ins into the instances: those in `frustum` first, then (with `all`, for the shadow pass) the rest
-   * after them. Both passes of a frame write the same order and only the count differs, as three.js uploads a batch's
-   * buffers once a frame, whichever pass comes first: the view draws the first `count` of what was uploaded.
-   */
-  sync(eye: THREE.Vector3 | null, range2: number, frustum: THREE.Frustum | null, all = false) {
+  sync(eye: THREE.Vector3 | null, range2: number) {
     const m = this.mesh;
-    const bounds = this.look.geometry.boundingSphere ?? (this.look.geometry.computeBoundingSphere(), this.look.geometry.boundingSphere!);
-    const { x: cx, y: cy, z: cz } = bounds.center;
+    const mats = m.instanceMatrix.array as Float32Array;
+    const cols = m.instanceColor!.array as Float32Array;
     const o = this.outline;
     const omats = o ? (o.instanceMatrix.array as Float32Array) : null;
-    const culled = this.culled;
-    culled.length = 0;
+    const morph = m.morphTexture ? (m.morphTexture.image.data as Float32Array) : null;
+    const len = morph ? m.morphTexture!.image.width : 0;
+    const relative = this.look.geometry.morphTargetsRelative;
     let n = 0;
     let k = 0;
     for (const s of this.slots) {
       if (!shown(s.obj)) continue;
       const e = s.obj.matrixWorld.elements;
-      if (frustum) {
-        // the part's bounds where it stands, as three's own culling would test a mesh
-        sphere.center.set(e[0] * cx + e[4] * cy + e[8] * cz + e[12], e[1] * cx + e[5] * cy + e[9] * cz + e[13], e[2] * cx + e[6] * cy + e[10] * cz + e[14]);
-        sphere.radius = bounds.radius * Math.sqrt(Math.max(e[0] * e[0] + e[1] * e[1] + e[2] * e[2], e[4] * e[4] + e[5] * e[5] + e[6] * e[6], e[8] * e[8] + e[9] * e[9] + e[10] * e[10]));
-        if (!frustum.intersectsSphere(sphere)) {
-          if (all) culled.push(s);
-          continue;
+      mats.set(e, n * 16);
+      cols[n * 3] = s.color.r;
+      cols[n * 3 + 1] = s.color.g;
+      cols[n * 3 + 2] = s.color.b;
+      if (morph) {
+        // as InstancedMesh.setMorphAt writes them: the base weight, then each target's
+        const w = (s.obj as THREE.Mesh).morphTargetInfluences;
+        let sum = 0;
+        for (let i = 1; i < len; i++) {
+          const v = w?.[i - 1] ?? 0;
+          morph[n * len + i] = v;
+          sum += v;
         }
+        morph[n * len] = relative ? 1 : 1 - sum;
       }
-      this.write(s, n++);
+      n++;
       if (omats) {
         const dx = e[12] - (eye?.x ?? e[12]);
         const dy = e[13] - (eye?.y ?? e[13]);
@@ -181,40 +178,13 @@ class Batch {
         if (dx * dx + dy * dy + dz * dz <= range2) omats.set(e, k++ * 16);
       }
     }
-    const seen = n;
-    for (const s of culled) this.write(s, n++);
-    culled.length = 0;
-    m.count = all ? n : seen;
+    m.count = n;
     m.instanceMatrix.needsUpdate = true;
     m.instanceColor!.needsUpdate = true;
     if (m.morphTexture) m.morphTexture.needsUpdate = true;
     if (o) {
       o.count = k;
       o.instanceMatrix.needsUpdate = true;
-    }
-  }
-
-  /** Slot `s` into instance `i`: its world matrix, colour and morph weights. */
-  private write(s: Slot, i: number) {
-    const m = this.mesh;
-    const mats = m.instanceMatrix.array as Float32Array;
-    mats.set(s.obj.matrixWorld.elements, i * 16);
-    const cols = m.instanceColor!.array as Float32Array;
-    cols[i * 3] = s.color.r;
-    cols[i * 3 + 1] = s.color.g;
-    cols[i * 3 + 2] = s.color.b;
-    if (m.morphTexture) {
-      // as InstancedMesh.setMorphAt writes them: the base weight, then each target's
-      const morph = m.morphTexture.image.data as Float32Array;
-      const len = m.morphTexture.image.width;
-      const w = (s.obj as THREE.Mesh).morphTargetInfluences;
-      let sum = 0;
-      for (let j = 1; j < len; j++) {
-        const v = w?.[j - 1] ?? 0;
-        morph[i * len + j] = v;
-        sum += v;
-      }
-      morph[i * len] = this.look.geometry.morphTargetsRelative ? 1 : 1 - sum;
     }
   }
 
@@ -237,28 +207,11 @@ export class BatchSet {
   /** False: no part of this set casts a shadow, whatever its look says (visitors, grounded by their glow instead). */
   shadows = true;
   private batches = new Map<string, Batch>();
-  private synced = '';
   private eye = new THREE.Vector3();
-  private frustum = new THREE.Frustum();
 
   constructor(private materials: BatchMaterials) {
     this.root.name = 'batches';
   }
-
-  /**
-   * Called by three.js just before it draws any batch mesh: onBeforeShadow (renderer, object, camera, shadow camera…)
-   * or onBeforeRender (renderer, scene, camera, geometry…). The first call of each pass syncs them all: for the shadow
-   * pass every instance, for a view only those in its frustum.
-   */
-  readonly hook = (renderer: THREE.WebGLRenderer, _scene: unknown, camera: THREE.Camera, shadowCamera?: unknown) => {
-    const shadow = (shadowCamera as THREE.Camera | undefined)?.isCamera === true;
-    const key = `${renderer.info.render.frame}:${shadow ? 'shadow' : camera.id}`;
-    if (key === this.synced) return;
-    this.synced = key;
-    // shadows: everything, in the order the viewer's camera will want it (what it sees first), so both passes agree
-    if (shadow) this.sync(this.camera, true);
-    else this.sync(camera);
-  };
 
   /** Draws `obj` (an invisible stand-in placed in the scene) as an instance of `look`, in `color`. */
   add(l: Look, obj: THREE.Object3D, color: THREE.ColorRepresentation): BatchSlot {
@@ -276,15 +229,11 @@ export class BatchSet {
     };
   }
 
-  /**
-   * Copies every stand-in's world matrix and colour into its batch: only those `view` can see, when given; with `all`
-   * the rest too, after them.
-   */
-  sync(view: THREE.Camera | null = null, all = false) {
+  /** Copies every shown stand-in's world matrix and colour into its batch. Call it before three.js draws the scene. */
+  sync() {
     const eye = this.camera ? this.eye.setFromMatrixPosition(this.camera.matrixWorld) : null;
     const range2 = this.outlineRange * this.outlineRange;
-    const frustum = view ? this.frustum.setFromProjectionMatrix(viewProjection.multiplyMatrices(view.projectionMatrix, view.matrixWorldInverse)) : null;
-    for (const b of this.batches.values()) b.sync(eye, range2, frustum, all);
+    for (const b of this.batches.values()) b.sync(eye, range2);
   }
 
   /** How many batches and drawn instances there are (window.__swarmBatches). */
