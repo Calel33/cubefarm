@@ -171,7 +171,7 @@ export function HUD() {
       {!ghReady && ghError && <div className="hud-banner">⚠️ {ghError}</div>}
 
       {/* the centre dot (Settings → Accessibility) is a bolder crosshair that stays through the elevator's fade too */}
-      {started && !overlay && (!travel || centerDot) && onFoot && !scope && <div className={`crosshair ${focus ? 'crosshair-hot' : ''} ${centerDot ? 'crosshair-dot' : ''}`} />}
+      {started && !overlay && (!travel || centerDot) && onFoot && !scope && held?.kind !== 'paddle' && <div className={`crosshair ${focus ? 'crosshair-hot' : ''} ${centerDot ? 'crosshair-dot' : ''}`} />}
       {started && !overlay && !travel && onFoot && <RoofHud />}
       <AgentCard />
       {started && !overlay && onFoot && (focus || sip) && (

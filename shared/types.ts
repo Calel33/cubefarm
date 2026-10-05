@@ -528,6 +528,17 @@ export interface CeoInfo {
   nextReviewAt: number | null; // null when the heartbeat is off
 }
 
+/** One player on a floor's ping-pong leaderboard: the manager or an agent, with their games on that floor. */
+export interface PongRow {
+  id: string; // 'player' for the manager (shared/pong.ts PONG_PLAYER), else an agent id
+  name: string; // as of their last game
+  wins: number;
+  losses: number;
+  pointsFor: number;
+  pointsAgainst: number;
+  lastAt: number; // epoch ms of their last game
+}
+
 export interface WorldSnapshot {
   user: string | null; // gh login
   ghReady: boolean;
@@ -555,6 +566,7 @@ export interface WorldSnapshot {
   ticker?: TickerItem[]; // the floors' recent ticker lines, oldest first
   notifyChannels: NotifyChannelsView;
   progress: ProgressView; // coins, decorations and achievements (#210)
+  pong: Record<string, PongRow[]>; // each floor's ping-pong leaderboard by repo id, best first
 }
 
 export type ServerEvent =
@@ -586,6 +598,7 @@ export type ServerEvent =
   | { type: 'notify'; note: NoteView }
   | { type: 'progress'; progress: ProgressView }
   | { type: 'reward'; reward: RewardView }
+  | { type: 'pong'; repoId: string; board: PongRow[] }
   | { type: 'toast'; level: 'info' | 'success' | 'error'; text: string };
 
 /** Browser to server on /ws. resync: send a fresh snapshot (a tab back from the time-lapse replay). */

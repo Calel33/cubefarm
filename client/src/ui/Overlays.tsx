@@ -197,6 +197,13 @@ function Help({ tab: initial }: { tab?: HelpTab }) {
             Every floor has a basketball hoop on the south wall, with its ball waiting underneath. Aim at the painted square on the backboard and fill the throw meter about half to three quarters of the way: the ball
             arcs up and drops through the rim. A tap falls short and a full charge flies long. Hit someone with a ball or a dart and they react. Aim at the roomba and press <Key action="interact" /> for a happy spin.
           </p>
+          <h3>Ping-pong</h3>
+          <p>
+            Every office floor has a ping-pong table south of the desks. Press <Key action="interact" /> at either end to pick up a paddle: the view moves behind your end, and someone free on the floor comes over to
+            play you. The mouse (or the right stick) moves the paddle, up being towards the net; swing it through the ball for pace, forwards for topspin, back for backspin, sideways to curve it. Click (or{' '}
+            <Key action="throw" />) to toss and serve. Games go to 11, won by 2, and land on the floor's leaderboard on the wall. <Key action="drop" /> or <kbd>Esc</kbd> puts the paddle down at any time. Now and then two
+            idle teammates play each other: press <Key action="interact" /> at an end to step in.
+          </p>
           <h3>The office dog</h3>
           <p>
             One dog roams the whole building, taking the elevator between floors now and then. Aim at it and press <Key action="interact" /> to pet it: it wiggles and follows you for a while (into the elevator
