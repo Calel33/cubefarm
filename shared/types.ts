@@ -5,6 +5,7 @@ import type { ProgressView, RewardView } from './progress.ts';
 import type { WeatherSettings, WeatherView, WorldEventSettings } from './outside.ts';
 import type { ThemeSettings } from './themes.ts';
 import type { AgentStyle } from './looks.ts';
+import type { IdeaView } from './ideas.ts';
 
 export type AgentStatus =
   | 'idle' // at desk, nothing assigned
@@ -567,6 +568,7 @@ export interface WorldSnapshot {
   notifyChannels: NotifyChannelsView;
   progress: ProgressView; // coins, decorations and achievements (#210)
   pong: Record<string, PongRow[]>; // each floor's ping-pong leaderboard by repo id, best first
+  ideas?: IdeaView[]; // the idea wall (shared/ideas.ts), oldest first (absent in the time-lapse's frames)
 }
 
 /** What changed about an agent since the office last sent it, with its id; every field for one it never sent. */
@@ -611,6 +613,8 @@ export type ServerEvent =
   | { type: 'progress'; progress: ProgressView }
   | { type: 'reward'; reward: RewardView }
   | { type: 'pong'; repoId: string; board: PongRow[] }
+  /** An idea pinned on the wall, or its new status (shared/ideas.ts). */
+  | { type: 'idea'; idea: IdeaView }
   | { type: 'toast'; level: 'info' | 'success' | 'error'; text: string }
   // Presence (shared/presence.ts): relayed between the office's tabs, never persisted.
   | { type: 'visitors'; you: string; visitors: VisitorView[] }

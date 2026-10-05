@@ -1187,6 +1187,43 @@ function ceoSession(opts: SessionOptions, cb: SessionCallbacks): SessionHandle {
       const prs = s.floors.reduce((n, f) => n + f.pullRequests.length, 0);
       return `All ${s.floors.length} floors look healthy: ${issues} open issues and ${prs} pull requests in flight. No changes needed.`;
     },
+    // New ideas on the idea wall: the oldest two become one issue on their floor (planned), the rest are declined for
+    // this milestone with a reason, all through the real tools. Shipping that issue gives both cards their 🎉.
+    async ideas() {
+      const s = await status();
+      const out = await use('list_ideas', {});
+      const all = out.startsWith('{') ? (JSON.parse(out) as { ideas: { id: string; floor: number; kind: string; text: string; status: string }[] }).ideas : [];
+      const fresh = all.filter((i) => i.status === 'new' || i.status === 'seen');
+      if (!fresh.length) return 'The idea wall is clear: nothing new to plan.';
+      await think('Grouping the related ideas into one whole feature.');
+      const plan = fresh.slice(0, 2);
+      const rest = fresh.slice(2);
+      const floor = plan[0].floor || s.floors[0]?.floor;
+      let n = 0;
+      if (floor) {
+        await read(`${s.floors.find((f) => f.floor === floor)?.repo ?? 'repo'}/README.md`, 20);
+        const filed = await use('file_issue', {
+          floor,
+          title: `From the idea wall: ${short(plan[0].text, 80)}`,
+          body: `The manager pinned ${plan.length === 1 ? 'this idea' : 'these ideas'} on the idea wall:\n\n${plan.map((i) => `- (${i.kind}) ${i.text}`).join('\n')}\n\nAcceptance criteria:\n- Each idea above works as described\n- Covered by tests`,
+        });
+        n = Number(filed.match(/#(\d+)/)?.[1] ?? 0);
+      }
+      const planned: string[] = [];
+      for (const i of plan) {
+        const done = n
+          ? await use('update_idea', { id: i.id, status: 'planned', issue: n, floor, note: plan.length > 1 ? `Grouped with a related idea into #${n}, one whole feature.` : `Filed as #${n}.` })
+          : await use('update_idea', { id: i.id, status: 'declined', note: 'There is no floor to build it on yet: connect a repo first.' });
+        if (!done.startsWith('Refused') && n) planned.push(`"${short(i.text, 40)}"`);
+      }
+      for (const i of rest) await use('update_idea', { id: i.id, status: 'declined', note: 'Not this milestone: two of your ideas are already in flight. Pin it again once they ship.' });
+      return [
+        planned.length ? `From the idea wall: ${planned.join(' and ')} ${planned.length === 1 ? 'is' : 'are'} now #${n} on floor ${floor}.` : "I couldn't plan the new ideas yet.",
+        rest.length ? `I declined ${rest.length} for now; the reason is on ${rest.length === 1 ? 'its card' : 'their cards'}.` : '',
+      ]
+        .filter(Boolean)
+        .join(' ');
+    },
     // A stuck PR: read what QA and GitHub say, then act through the real triage tools, as the real CEO would.
     async triage(floor: number, pr: number, facts: string) {
       await step([{ kind: 'tool', tool: 'Read', text: `⏺ Read PR #${pr}'s QA report` }, { kind: 'result', text: '  ⎿ Read 38 lines' }]);
@@ -1272,7 +1309,9 @@ function ceoSession(opts: SessionOptions, cb: SessionCallbacks): SessionHandle {
         ? () => scripts.onboard(Number(where?.[1]), where?.[2] ?? '')
         : /has a brief for floor/.test(prompt)
           ? () => scripts.plan(Number(where?.[1]), prompt.match(/"""([\s\S]*?)"""/)?.[1]?.trim() ?? '')
-          : /Periodic review/.test(prompt)
+          : /new ideas? on the idea wall/.test(prompt)
+            ? () => scripts.ideas()
+            : /Periodic review/.test(prompt)
             ? () => scripts.review()
             : () => scripts.chat(prompt.split('\n').slice(1).join(' ').trim() || prompt);
 

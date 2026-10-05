@@ -254,6 +254,10 @@ export function describeOfficeTool(action: string, input: Record<string, unknown
       return `📣 escalate PR #${String(input.pr ?? '?')}${floor}${input.reason ? `: ${clip(String(input.reason), 90)}` : ''}`;
     case 'route_issue':
       return `🔀 route_issue #${String(input.number ?? '?')}${floor}${input.specialty !== undefined ? ` · ${input.specialty || 'no specialty'}` : ''}${Array.isArray(input.depends_on) ? ` · depends on ${input.depends_on.map((n) => `#${n}`).join(', ') || 'nothing'}` : ''}`;
+    case 'list_ideas':
+      return `💡 list_ideas${input.status ? ` · ${String(input.status)}` : ''}`;
+    case 'update_idea':
+      return `📌 update_idea ${String(input.id ?? '?')} → ${String(input.status ?? '?')}${input.issue != null ? ` #${String(input.issue)}` : ''}`;
   }
   return `🏢 ${action}(${clip(JSON.stringify(input), 120)})`;
 }

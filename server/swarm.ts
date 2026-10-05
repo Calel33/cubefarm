@@ -5,7 +5,7 @@ import type { WebSocket } from 'ws';
 import type { Backend } from './backend.ts';
 import type { LogEntry, SessionHandle, SessionResult } from './agentRunner.ts';
 import type { PrDetails } from './github.ts';
-import { defaultProjectsDir, DESK_SWEEP_INTERVAL_MS, HOME_DIR, LOG_BUFFER, SCHEDULER_INTERVAL_MS, STATE_FILE, SYNC_INTERVAL_MS, WORKSPACE_ROOT } from './config.ts';
+import { defaultProjectsDir, DESK_SWEEP_INTERVAL_MS, HOME_DIR, IDEA_QUIET_MS, LOG_BUFFER, SCHEDULER_INTERVAL_MS, STATE_FILE, SYNC_INTERVAL_MS, WORKSPACE_ROOT } from './config.ts';
 import { ceoJobPrompt, ceoSystemPrompt, checkCloseIssue, checkPendingLimit, createOfficeTools, FLOOR_DESKS, floorCapacity, IssueCap, jobLabel, MAX_PENDING_PROPOSALS, planRoute, seatCount, specialtyLabel, specialtySlug, type CeoJob, type OfficeTools } from './ceo.ts';
 import { afterClose, ASK_AGAIN_MS, closedWhy, closuresHeld, forgettable, issueOpen, nameList, pullNow, stillOpen, stoppedMessage, toAsk, toHold, type Closure, type FloorState, type KnownPull, type LearnedPull } from './closeCleanup.ts';
 import { depsPromptLine, type DepsOutcome } from './deps.ts';
@@ -50,6 +50,8 @@ import { dayKey, journalFrame } from '../shared/journal.ts';
 import { cleanStyle, HAIR_COLORS, SKIN_TONES, type AgentStyle } from '../shared/looks.ts';
 import { achievementDef, type ProgressView } from '../shared/progress.ts';
 import { parsePongResult, PONG_PLAYER, recordGame } from '../shared/pong.ts';
+import { cleanColor, cleanName, cleanText } from '../shared/presence.ts';
+import { cleanIdeaText, ideasReviewAt, ideaUpdate, isIdeaKind, isIdeaStatus, newestNew, shippedBy, trimIdeas, type IdeaLink, type IdeaView } from '../shared/ideas.ts';
 import { effectiveModel } from '../shared/models.ts';
 import { DEFAULT_WEATHER, DEFAULT_WORLD_EVENTS, weatherSettings, worldEventSettings } from '../shared/outside.ts';
 import { DEFAULT_THEME_SETTINGS, dueGreeting, themeSettings } from '../shared/themes.ts';
@@ -208,6 +210,8 @@ interface Persisted {
   held: HeldIssue[];
   progress: LedgerState; // coins, decorations, achievements and careers (ledger.ts)
   pong: Record<string, PongRow[]>; // each floor's ping-pong leaderboard, by repo id
+  ideas: IdeaView[]; // the idea wall (shared/ideas.ts), oldest first
+  ideasHandedUpTo: number; // the newest new idea already handed to a CEO review
 }
 
 interface Shot {
@@ -336,6 +340,18 @@ async function loadScreen(agentId: string): Promise<{ data: Buffer; mime: string
     }
   }
   return null;
+}
+
+// Pictures pinned with ideas: what the manager was looking at, as the browser sent it (a data: URL).
+const SHOT_MIMES = ['image/jpeg', 'image/png', 'image/webp'];
+const SHOT_MAX_BYTES = 700_000;
+
+function parseShot(raw: unknown): { data: Buffer; mime: string } {
+  const m = typeof raw === 'string' ? raw.match(/^data:(image\/(?:jpeg|png|webp));base64,([A-Za-z0-9+/=]+)$/) : null;
+  if (!m) throw new HttpError(400, 'The picture must be a JPEG, PNG or WebP data URL.');
+  const data = Buffer.from(m[2], 'base64');
+  if (data.length > SHOT_MAX_BYTES) throw new HttpError(413, 'The picture is too big.');
+  return { data, mime: m[1] };
 }
 
 // QA's screenshots of each PR's latest round, for the app viewer's QA panel (qaShots.ts).
@@ -473,6 +489,8 @@ export class Swarm {
     held: [],
     progress: emptyLedger(),
     pong: {},
+    ideas: [],
+    ideasHandedUpTo: 0,
   };
   /**
    * The CEO's office tools. Every session gets its own server: one can only be connected to one session at a time, so
@@ -494,6 +512,8 @@ export class Swarm {
       rerunChecks: (a) => this.triageRerunChecks(a),
       closePull: (a) => this.triageClosePull(a),
       escalate: (a) => this.triageEscalate(a),
+      listIdeas: (a) => this.listIdeas(a),
+      updateIdea: (a) => this.updateIdea(a),
     });
   }
   private ceoIssues = new IssueCap(MAX_ISSUES_PER_JOB); // issues filed during the current CEO job
@@ -654,6 +674,8 @@ export class Swarm {
         held: loaded.held ?? [],
         progress: loadLedger(loaded.progress),
         pong: loaded.pong && typeof loaded.pong === 'object' ? loaded.pong : {},
+        ideas: Array.isArray(loaded.ideas) ? loaded.ideas : [],
+        ideasHandedUpTo: loaded.ideasHandedUpTo ?? 0,
       };
       for (const m of this.state.messages) this.messageSeq = Math.max(this.messageSeq, m.id + 1);
       if (!EFFORTS.includes(this.state.settings.defaultEffort)) this.state.settings.defaultEffort = 'medium';
@@ -970,6 +992,7 @@ export class Swarm {
       officeUpdate: this.officeHead ? this.officeUpdateView() : undefined,
       progress: this.progressView(),
       pong: this.state.pong,
+      ideas: this.state.ideas,
     };
   }
 
@@ -1604,6 +1627,7 @@ export class Swarm {
       this.cleanUpClosed(repo);
       this.recordSync(repo, rt.pulls);
       this.reconcilePulls(repo, rt.pulls);
+      this.shipIdeas();
       // Something was merged since the last look (by the office or anyone else): bring the folder up to date.
       const newest = pulls.reduce<string | null>((m, p) => (p.mergedAt && (!m || p.mergedAt > m) ? p.mergedAt : m), null);
       if (newest !== rt.lastMergedAt) {
@@ -3376,6 +3400,7 @@ export class Swarm {
     if (this.officeUpdateTick()) return; // draining for the office's own update
     if (this.limited()) return;
     // Management first: the CEO's jobs are short and shape everyone else's work.
+    this.maybeIdeaReview();
     this.maybeHeartbeat();
     this.startCeoWork();
     const repos = this.state.repos.filter((r) => {
@@ -3695,7 +3720,7 @@ export class Swarm {
     rt.session = this.backend.startSession(
       {
         cwd: CEO_DIR,
-        prompt: ceoJobPrompt(job, floor, triage),
+        prompt: ceoJobPrompt(job, floor, triage, job.kind === 'review' ? this.state.ideas.filter((i) => i.status === 'new').length : 0),
         systemAppend: ceoSystemPrompt(this.ceoPromptInput(a)),
         model: a.model || CEO_MODEL,
         effort: a.effort || CEO_EFFORT,
@@ -3806,6 +3831,7 @@ export class Swarm {
       agents: this.state.agents.filter((a) => a.role !== 'ceo').map((a) => [a.id, FREE.includes(a.status) ? 'free' : a.status]),
       qa: this.state.qa.map((q) => [q.repoId, q.prNumber, q.status]),
       requests: this.state.requests.filter((r) => r.status === 'pending').map((r) => r.id),
+      ideas: this.state.ideas.filter((i) => i.status === 'new' || i.status === 'seen').map((i) => i.id),
     };
     return crypto.createHash('sha1').update(JSON.stringify(data)).digest('hex');
   }
@@ -3822,6 +3848,137 @@ export class Swarm {
       return;
     }
     this.enqueueCeo({ kind: 'review', at: Date.now() });
+  }
+
+  // ---------- the idea wall ----------
+
+  private ideaShotDir() {
+    return path.join(HOME_DIR, this.backend.demo ? 'demo-idea-shots' : 'idea-shots');
+  }
+
+  /** POST /api/ideas: the manager pins an idea from a wall, the phone or pocket mode. It shows on the walls at once. */
+  async pinIdea(body: Record<string, unknown>): Promise<IdeaView> {
+    const text = cleanIdeaText(body.text);
+    if (!text) throw new HttpError(400, 'Write the idea first.');
+    const floor = Number(body.floor ?? 0);
+    if (!Number.isInteger(floor) || (floor !== 0 && !this.state.repos.some((r) => r.floor === floor))) throw new HttpError(400, `There is no floor ${String(body.floor)}.`);
+    const shot = body.shot == null || body.shot === '' ? null : parseShot(body.shot);
+    const now = Date.now();
+    const idea: IdeaView = {
+      id: `idea-${now.toString(36)}${crypto.randomBytes(2).toString('hex')}`,
+      text,
+      kind: isIdeaKind(body.kind) ? body.kind : 'feature',
+      floor,
+      where: cleanText(body.where, 160) || null,
+      by: cleanName(body.by, this.state.settings.managerName || this.user || 'The manager'),
+      color: cleanColor(body.color, '#ffd166'),
+      at: now,
+      status: 'new',
+      links: [],
+      pr: null,
+      note: '',
+      updatedAt: now,
+      shot: !!shot,
+    };
+    if (shot) {
+      await fs.mkdir(this.ideaShotDir(), { recursive: true });
+      await fs.writeFile(path.join(this.ideaShotDir(), `${idea.id}.${MIME_EXT[shot.mime]}`), shot.data);
+    }
+    const kept = trimIdeas([...this.state.ideas, idea]);
+    for (const gone of this.state.ideas.filter((i) => !kept.includes(i) && i.shot)) void this.removeIdeaShot(gone.id);
+    this.state.ideas = kept;
+    this.emitIdea(idea);
+    return idea;
+  }
+
+  /** GET /api/ideas/:id/shot: the picture of the manager's view pinned with an idea, or null. */
+  async ideaShot(id: string): Promise<{ data: Buffer; mime: string } | null> {
+    const idea = this.state.ideas.find((i) => i.id === id);
+    if (!idea?.shot) return null;
+    for (const mime of SHOT_MIMES) {
+      const data = await fs.readFile(path.join(this.ideaShotDir(), `${idea.id}.${MIME_EXT[mime]}`)).catch(() => null);
+      if (data) return { data, mime };
+    }
+    return null;
+  }
+
+  private async removeIdeaShot(id: string) {
+    await Promise.all(SHOT_MIMES.map((m) => fs.rm(path.join(this.ideaShotDir(), `${id}.${MIME_EXT[m]}`), { force: true, maxRetries: 3 }).catch(() => undefined)));
+  }
+
+  private emitIdea(idea: IdeaView) {
+    this.broadcast({ type: 'idea', idea });
+    this.save();
+  }
+
+  /** The CEO's list_ideas: small, new ones first. Listing is the CEO seeing them. */
+  private listIdeas(a: { status?: string }) {
+    const want = a.status ?? 'open';
+    const open = (st: IdeaView['status']) => st === 'new' || st === 'seen' || st === 'planned';
+    const rank: Record<IdeaView['status'], number> = { new: 0, seen: 1, planned: 2, shipped: 3, declined: 4 };
+    const list = this.state.ideas
+      .filter((i) => want === 'all' || (want === 'open' ? open(i.status) : i.status === want))
+      .sort((x, y) => rank[x.status] - rank[y.status] || x.at - y.at);
+    if (!list.length) return want === 'open' ? 'No open ideas on the wall.' : `No ${want} ideas.`;
+    const shown = list.slice(0, 40);
+    const ideas = shown.map((i) => ({
+      id: i.id,
+      kind: i.kind,
+      floor: i.floor,
+      text: i.text.slice(0, 600),
+      where: i.where ?? undefined,
+      status: i.status,
+      issues: i.links.length ? i.links.map((l) => `floor ${l.floor} #${l.number}`) : undefined,
+      note: i.note || undefined,
+      pinned: new Date(i.at).toISOString().slice(0, 16),
+    }));
+    const now = Date.now();
+    for (const i of shown) {
+      if (i.status !== 'new') continue;
+      Object.assign(i, { status: 'seen', updatedAt: now });
+      this.emitIdea(i);
+    }
+    return JSON.stringify({ ideas, more: list.length > shown.length ? list.length - shown.length : undefined });
+  }
+
+  /** The CEO's update_idea: planned with an issue, declined with a reason, seen or shipped (shared/ideas.ts ideaUpdate). */
+  private async updateIdea(a: { id: string; status: string; issue?: number; floor?: number; note: string }) {
+    const idea = this.state.ideas.find((i) => i.id === String(a.id ?? '').trim());
+    if (!idea) throw new Error(`There is no idea ${a.id}. The ids are in list_ideas.`);
+    if (!isIdeaStatus(a.status)) throw new Error(`"${a.status}" is not a status: seen, planned, shipped or declined.`);
+    let link: IdeaLink | null = null;
+    if (a.issue != null) {
+      const floor = a.floor ?? (idea.floor || (this.state.repos.length === 1 ? this.state.repos[0].floor : 0));
+      if (!floor) throw new Error(`Idea ${idea.id} is company-wide: pass the floor the issue is on.`);
+      const repo = this.floorRepo(floor);
+      const n = Number(a.issue);
+      const open = this.repoRt.get(repo.id)?.issues.some((i) => i.number === n);
+      if (!open && !(await this.backend.issueState(repo.fullName, n).catch(() => null))) throw new Error(`There is no issue #${n} on floor ${floor}.`);
+      link = { repoId: repo.id, floor, number: n };
+    }
+    Object.assign(idea, ideaUpdate(idea, a.status, String(a.note ?? ''), link), { updatedAt: Date.now() });
+    this.emitIdea(idea);
+    this.shipIdeas(); // linked to an issue a merged PR already closed
+    return `Idea ${idea.id} is ${idea.status}${idea.links.length ? ` (${idea.links.map((l) => `floor ${l.floor} #${l.number}`).join(', ')})` : ''}.`;
+  }
+
+  /** Planned ideas whose every issue a merged PR closed have shipped: their cards get the 🎉. */
+  private shipIdeas() {
+    for (const idea of this.state.ideas) {
+      const pr = shippedBy(idea, (l) => this.repoRt.get(l.repoId)?.pulls.find((p) => p.state === 'MERGED' && p.closesIssues.includes(l.number))?.number ?? null);
+      if (pr == null) continue;
+      Object.assign(idea, { status: 'shipped', pr, updatedAt: Date.now() });
+      this.emitIdea(idea);
+      this.toast('success', `🎉 Your idea shipped in PR #${pr}: ${clip(idea.text, 70)}`);
+    }
+  }
+
+  /** New ideas, quiet for IDEA_QUIET_MS: one CEO review for the whole burst. */
+  private maybeIdeaReview() {
+    const due = ideasReviewAt(this.state.ideas, this.state.ideasHandedUpTo, IDEA_QUIET_MS);
+    if (due == null || Date.now() < due || this.state.repos.length === 0) return;
+    this.state.ideasHandedUpTo = newestNew(this.state.ideas);
+    this.enqueueCeo({ kind: 'review', ideas: true, at: Date.now() });
   }
 
   // ---------- triage ----------

@@ -1,5 +1,6 @@
 import { createSdkMcpServer, tool, type McpSdkServerConfigWithInstance } from '@anthropic-ai/claude-agent-sdk';
 import { z } from 'zod';
+import { IDEA_NOTE_MAX } from '../shared/ideas.ts';
 import { blockers, holdUps, setDependsOn } from '../shared/issues.ts';
 import type { CeoJobKind, QaStatus } from '../shared/types.ts';
 import { HttpError } from './httpError.ts';
@@ -16,6 +17,7 @@ export interface CeoJob {
   repoId?: string; // onboard / plan / triage
   prNumber?: number; // triage: the stuck pull request
   text?: string; // chat: the manager's message(s)
+  ideas?: boolean; // review: started by new ideas on the idea wall
   at: number;
 }
 
@@ -44,6 +46,8 @@ export interface OfficeHandlers {
   rerunChecks(a: { floor: number; pr: number }): Promise<string>;
   closePull(a: { floor: number; pr: number; comment: string }): Promise<string>;
   escalate(a: { floor: number; pr: number; reason: string }): Promise<string>;
+  listIdeas(a: { status?: string }): string;
+  updateIdea(a: { id: string; status: string; issue?: number; floor?: number; note: string }): Promise<string>;
 }
 
 export interface OfficeTools {
@@ -194,6 +198,24 @@ export function createOfficeTools(h: OfficeHandlers): OfficeTools {
       { floor: z.number().int(), pr: z.number().int().positive(), reason: z.string().min(1).max(300).describe('One line: what is wrong and what the manager has to decide') },
       (a) => run(() => h.escalate(a)),
     ),
+    tool(
+      'list_ideas',
+      "The manager's ideas from the idea wall, new ones first: id, kind, floor (0: company-wide), text, where they were, status, linked issues and your note. Listing marks new ones as seen.",
+      { status: z.enum(['open', 'all', 'new', 'seen', 'planned', 'shipped', 'declined']).optional().describe('open (default): new, seen and planned; all: every idea') },
+      (a) => run(() => h.listIdeas(a)),
+    ),
+    tool(
+      'update_idea',
+      'Answer an idea on the wall: planned with the issue it became (file or find the issue first; one issue can carry several related ideas), declined with a short reason, or shipped. The manager reads your note on its card.',
+      {
+        id: z.string().describe('The idea id from list_ideas'),
+        status: z.enum(['seen', 'planned', 'shipped', 'declined']),
+        issue: z.number().int().positive().optional().describe('planned: the issue number it became'),
+        floor: z.number().int().positive().optional().describe("The issue's floor, when not the idea's own (company-wide ideas)"),
+        note: z.string().max(IDEA_NOTE_MAX).describe('One or two sentences: what you did, or why not'),
+      },
+      (a) => run(() => h.updateIdea(a)),
+    ),
   ];
   const server = createSdkMcpServer({ name: 'office', version: '1.0.0', tools: defs });
   return {
@@ -270,12 +292,13 @@ export function ceoSystemPrompt(o: {
     '- Issues: QA is usually the scarcer resource. When PRs queue for QA (capacity.prsAwaitingQa in company_status), file fewer, bigger issues, not more. Most briefs need 1 to 4 issues. Write "Depends on #N" only when an issue truly cannot start until #N\'s code is merged, because it waits until #N is closed. Keep dependency chains to two steps at most. The office starts the issues that hold up others first. Do not duplicate open issues: fix an existing issue\'s specialty or dependencies with route_issue. File at most 12 issues per job, or per message from the manager.',
     '- Close an issue that is superseded or no longer wanted with close_issue, not by making it wait for another issue.',
     '- Triage jobs: a pull request got stuck (needs-human). Look before the manager does, and bring them only real decisions. Read the facts in the job and the code, then call exactly one of retry_qa (a flaky QA session, or it has been fixed since), send_back (a developer can fix it; your note says how), rerun_checks (a red check that looks flaky or like an outage), close_pull (the approach is wrong: its issue stays open to be built again) or escalate (only the manager can decide: a product call, credentials, a broken setup).',
+    "- The idea wall: the manager pins ideas around the office (list_ideas). Answer each with update_idea: planned with its issue (related ideas share one whole-feature issue; reuse an open issue that covers it), or declined with a short reason. A question gets its answer in the note.",
     "- When company.usage in company_status says pacing or paused, Claude's usage is running low and the office is finishing open work first: file only what is needed next, not a whole milestone.",
     '- Your final message goes straight to the manager\'s phone. Keep it short and plain: what you found, what you proposed, what you filed, and any question you need answered. No headings, no tables.',
   ].join('\n');
 }
 
-export function ceoJobPrompt(job: CeoJob, floor: { floor: number; fullName: string; clone: string; mission: string; backlog: number } | null, pr?: TriagePr | null): string {
+export function ceoJobPrompt(job: CeoJob, floor: { floor: number; fullName: string; clone: string; mission: string; backlog: number } | null, pr?: TriagePr | null, newIdeas = 0): string {
   switch (job.kind) {
     case 'triage':
       if (!floor || !pr) return `Pull request #${job.prNumber ?? '?'} no longer needs triage. Reply "Nothing to do."`;
@@ -322,6 +345,12 @@ export function ceoJobPrompt(job: CeoJob, floor: { floor: number; fullName: stri
       ].join('\n');
     case 'review':
       return [
+        ...(newIdeas
+          ? [
+              `The manager pinned ${newIdeas} new idea${newIdeas === 1 ? '' : 's'} on the idea wall. Start there: list_ideas, read the code they touch, then answer every one with update_idea (planned with its issue, or declined with a reason). Group related ideas into one whole-feature issue.`,
+              '',
+            ]
+          : []),
         'Periodic review of the company. For every floor, look at:',
         '- floors without a profile or QA brief: study them and write one',
         '- backlog against the team (capacity): long dependency chains or a specialty with a long queue (fix those with route_issue), or PRs piling up in QA (then plan fewer, bigger issues). Idle developers are not a reason to slice features: they cover QA.',
@@ -342,7 +371,7 @@ export function jobLabel(job: CeoJob, floor: { floor: number; fullName: string }
     case 'plan':
       return `Planning ${where}`;
     case 'review':
-      return 'Reviewing the company';
+      return job.ideas ? 'Reading the idea wall' : 'Reviewing the company';
     case 'chat':
       return 'Replying to you';
     case 'triage':

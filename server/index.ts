@@ -265,6 +265,20 @@ app.post('/api/journal/sample', route(() => swarm.journalSample()));
 app.post('/api/ceo/message', route((req) => swarm.messageCeo(str(req.body.text))));
 app.post('/api/ceo/review', route(() => swarm.requestReview()));
 app.post('/api/phone/read', route((req) => swarm.markPhoneRead(Number(req.body?.at) || Date.now())));
+
+// The idea wall (shared/ideas.ts): the manager pins ideas, the CEO answers them through its office tools.
+app.post('/api/ideas', route((req) => swarm.pinIdea(req.body ?? {})));
+app.get('/api/ideas/:id/shot', async (req, res, next) => {
+  try {
+    const shot = await swarm.ideaShot(String(req.params.id));
+    if (!shot) return void res.status(404).end();
+    res.setHeader('Content-Type', shot.mime);
+    res.setHeader('Cache-Control', 'private, max-age=86400');
+    res.end(shot.data);
+  } catch (err) {
+    next(err);
+  }
+});
 app.post(
   '/api/requests/:id/approve',
   route((req) =>

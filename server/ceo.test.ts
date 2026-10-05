@@ -96,6 +96,7 @@ describe('jobLabel', () => {
 describe('office tools', () => {
   const connect = async () => {
     const floors: unknown[] = [];
+    const ideas: unknown[] = [];
     const office = createOfficeTools({
       companyStatus: () => '{}',
       agentDetail: () => '{}',
@@ -111,12 +112,14 @@ describe('office tools', () => {
       rerunChecks: async () => '',
       closePull: async () => '',
       escalate: async () => '',
+      listIdeas: () => '{"ideas":[]}',
+      updateIdea: async (a) => (ideas.push(a), 'updated'),
     });
     const [serverSide, clientSide] = InMemoryTransport.createLinkedPair();
     await office.server.instance.connect(serverSide);
     const client = new Client({ name: 'test', version: '1.0.0' });
     await client.connect(clientSide);
-    return { client, floors };
+    return { client, floors, ideas };
   };
 
   it('lists every tool the CEO relies on', async () => {
@@ -129,6 +132,7 @@ describe('office tools', () => {
       'company_status',
       'escalate',
       'file_issue',
+      'list_ideas',
       'propose_hire',
       'propose_let_go',
       'rerun_checks',
@@ -136,8 +140,18 @@ describe('office tools', () => {
       'route_issue',
       'send_back',
       'set_floor_profile',
+      'update_idea',
       'update_job',
     ]);
+  });
+
+  it('takes update_idea with an issue, and refuses a status it does not know', async () => {
+    const { client, ideas } = await connect();
+    await client.callTool({ name: 'update_idea', arguments: { id: 'idea-1', status: 'planned', issue: 12, note: 'Filed as #12.' } });
+    expect(ideas).toEqual([{ id: 'idea-1', status: 'planned', issue: 12, note: 'Filed as #12.' }]);
+    const bad = await client.callTool({ name: 'update_idea', arguments: { id: 'idea-1', status: 'new', note: '' } });
+    expect(bad.isError).toBe(true);
+    expect(ideas).toHaveLength(1);
   });
 
   it('still takes preview_env as a map of strings', async () => {

@@ -60,6 +60,8 @@ export function envMinutes(value: string | undefined, fallback: number): number 
 export const PREVIEW_PORT = envPort(process.env.SWARM_PREVIEW_PORT, 6300);
 // A PR preview nobody has had on screen for this long stops.
 export const PR_PREVIEW_IDLE_MS = envMinutes(process.env.SWARM_PR_PREVIEW_IDLE_MIN, 20) * 60_000;
+// A new idea on the idea wall waits this long for more before the CEO reviews them all (shared/ideas.ts).
+export const IDEA_QUIET_MS = envMinutes(process.env.SWARM_IDEA_QUIET_MIN, 5) * 60_000;
 
 // How often each connected repo's issues and PRs are refreshed from GitHub.
 export const SYNC_INTERVAL_MS = 45_000;
