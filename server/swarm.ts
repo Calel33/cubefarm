@@ -48,6 +48,8 @@ import { WeatherService } from './weather.ts';
 import { blockers, holdUps, issueSpecialty, waitsMessage } from '../shared/issues.ts';
 import { dayKey, journalFrame } from '../shared/journal.ts';
 import { cleanStyle, HAIR_COLORS, SKIN_TONES, type AgentStyle } from '../shared/looks.ts';
+import { cleanTraits, seedTraits, type Traits } from '../shared/personality.ts';
+import { closeGame, dropAgent, emptySocial, interact, loadSocial, type InteractionKind, type SocialView } from '../shared/relations.ts';
 import { achievementDef, type ProgressView } from '../shared/progress.ts';
 import { parsePongResult, PONG_PLAYER, recordGame } from '../shared/pong.ts';
 import { effectiveModel } from '../shared/models.ts';
@@ -127,6 +129,7 @@ interface PersistedAgent {
   hair: string;
   skin: string;
   style: AgentStyle | null; // the look editor's picks (null: seeded from the id)
+  traits: Traits; // their personality (shared/personality.ts), seeded from the id when hired
   model: string;
   effort: EffortLevel | '';
   cli: AgentCli | ''; // '' = the office's default CLI
@@ -208,6 +211,7 @@ interface Persisted {
   held: HeldIssue[];
   progress: LedgerState; // coins, decorations, achievements and careers (ledger.ts)
   pong: Record<string, PongRow[]>; // each floor's ping-pong leaderboard, by repo id
+  social: Record<string, SocialView>; // each floor's relationships, by repo id (shared/relations.ts)
 }
 
 interface Shot {
@@ -318,6 +322,8 @@ const FULL_HOUSE = 4;
 // Mission control's numbers are recomputed after these events (debounced), and every half minute for the clock's sake.
 const OPS_EVENTS = new Set<ServerEvent['type']>(['repo', 'repoRemoved', 'agent', 'agentRemoved', 'qa', 'qaRemoved', 'ceo']);
 const OPS_TICK_MS = 30_000;
+// The same pair chatting again this soon (another tab reporting the same chat, say) doesn't count twice.
+const CHAT_REPEAT_MS = 60_000;
 const oneLine = (err: unknown) => (err instanceof Error ? err.message : String(err)).split(/\r?\n/)[0].slice(0, 200);
 
 // The latest browser screenshot per agent is kept on disk so monitors survive a server restart.
@@ -473,6 +479,7 @@ export class Swarm {
     held: [],
     progress: emptyLedger(),
     pong: {},
+    social: {},
   };
   /**
    * The CEO's office tools. Every session gets its own server: one can only be connected to one session at a time, so
@@ -621,6 +628,7 @@ export class Swarm {
           hiredBy: a.hiredBy ?? 'manager',
           look: a.look ?? lookFor(a.name),
           style: cleanStyle(a.style),
+          traits: cleanTraits(a.traits, seedTraits(a.id)),
           task: a.task ?? (a.issueNumber ? 'issue' : null),
           cli: isCli(a.cli) ? a.cli : '',
           sessionCli: a.sessionCli ?? (a.sessionId ? 'claude' : null),
@@ -654,6 +662,7 @@ export class Swarm {
         held: loaded.held ?? [],
         progress: loadLedger(loaded.progress),
         pong: loaded.pong && typeof loaded.pong === 'object' ? loaded.pong : {},
+        social: Object.fromEntries(Object.entries(loaded.social && typeof loaded.social === 'object' ? loaded.social : {}).map(([id, v]) => [id, loadSocial(v)])),
       };
       for (const m of this.state.messages) this.messageSeq = Math.max(this.messageSeq, m.id + 1);
       if (!EFFORTS.includes(this.state.settings.defaultEffort)) this.state.settings.defaultEffort = 'medium';
@@ -890,6 +899,7 @@ export class Swarm {
       hair: a.hair,
       skin: a.skin,
       style: a.style,
+      traits: a.traits,
       model: a.model,
       effort: a.effort,
       cli: a.cli,
@@ -970,6 +980,7 @@ export class Swarm {
       officeUpdate: this.officeHead ? this.officeUpdateView() : undefined,
       progress: this.progressView(),
       pong: this.state.pong,
+      social: this.state.social,
     };
   }
 
@@ -1271,6 +1282,7 @@ export class Swarm {
     this.state.qa = this.state.qa.filter((q) => q.repoId !== id);
     this.state.held = this.state.held.filter((h) => h.repoId !== id);
     delete this.state.pong[id];
+    delete this.state.social[id];
     for (const r of this.state.repos) r.links = r.links.filter((l) => l !== id);
     this.repoRt.delete(id);
     // Keep floors contiguous.
@@ -1890,8 +1902,9 @@ export class Swarm {
       throw new HttpError(400, role === 'qa' ? `The QA lab on floor ${repo.floor} is full (${MAX_DESKS.qa} stations)` : `Floor ${repo.floor} is full (${MAX_DESKS.dev} desks)`);
     }
     const name = opts.name?.trim() || this.freeName(role);
+    const id = opts.id && !this.state.agents.some((a) => a.id === opts.id) ? opts.id : crypto.randomUUID();
     const agent: PersistedAgent = {
-      id: opts.id && !this.state.agents.some((a) => a.id === opts.id) ? opts.id : crypto.randomUUID(),
+      id,
       name,
       repoId: repo.id,
       role,
@@ -1906,6 +1919,7 @@ export class Swarm {
       hair: opts.appearance?.hair ?? pick(HAIR),
       skin: opts.appearance?.skin ?? pick(SKIN),
       style: null,
+      traits: seedTraits(id),
       model: opts.model ?? '',
       effort: EFFORTS.includes(opts.effort as EffortLevel) ? (opts.effort as EffortLevel) : '',
       cli: isCli(opts.cli) ? opts.cli : '',
@@ -1952,7 +1966,7 @@ export class Swarm {
 
   updateAgent(
     id: string,
-    patch: { name?: string; model?: string; effort?: string; cli?: string; look?: string; title?: string; specialty?: string; brief?: string; color?: string; hair?: string; style?: unknown },
+    patch: { name?: string; model?: string; effort?: string; cli?: string; look?: string; title?: string; specialty?: string; brief?: string; color?: string; hair?: string; style?: unknown; traits?: unknown },
   ) {
     const a = this.agent(id);
     if (patch.cli !== undefined && a.role !== 'ceo') a.cli = isCli(patch.cli) ? patch.cli : '';
@@ -1964,6 +1978,7 @@ export class Swarm {
     if (patch.color && /^#[0-9a-f]{6}$/i.test(patch.color)) a.color = patch.color;
     if (patch.hair && /^#[0-9a-f]{6}$/i.test(patch.hair)) a.hair = patch.hair;
     if (patch.style !== undefined) a.style = cleanStyle(patch.style); // null: back to the seeded look
+    if (patch.traits !== undefined) a.traits = patch.traits === null ? seedTraits(a.id) : cleanTraits(patch.traits, a.traits); // null: back to the seeded personality
     if (patch.model !== undefined) a.model = String(patch.model).trim();
     if (patch.effort !== undefined) a.effort = EFFORTS.includes(patch.effort as EffortLevel) ? (patch.effort as EffortLevel) : '';
     if (a.role !== 'ceo') {
@@ -2007,6 +2022,8 @@ export class Swarm {
     }
     this.state.agents = this.state.agents.filter((x) => x.id !== id);
     applyLedger(this.state.progress, { kind: 'let-go', agentId: id });
+    const social = this.state.social[a.repoId];
+    if (social) this.setSocial(a.repoId, dropAgent(social, id));
     this.agentRt.delete(id);
     this.seenActivity.delete(id);
     this.shownActivity.delete(id);
@@ -2723,6 +2740,7 @@ export class Swarm {
     a.status = 'done';
     const pass = report.verdict === 'pass';
     if (rec) this.ledger({ kind: 'qa', repoId: repo.id, pr: rec.prNumber, round: rec.round, pass, tester: a.id, author: rec.devAgentId, at: Date.now() });
+    if (rec && pass && rec.devAgentId) this.bond(repo.id, 'qa-pass', a.id, rec.devAgentId, `PR #${rec.prNumber}`);
     this.appendLog(a, [{ kind: pass ? 'done' : 'error', text: `${pass ? '✅ QA passed' : '❌ QA failed'} PR #${a.prNumber} · ${report.checks.length} checks · ${rt.shots.length} screenshots` }]);
 
     // Evidence + comment on the PR
@@ -2836,6 +2854,7 @@ export class Swarm {
     this.fixNudged.delete(`${repo.id}#${rec.prNumber}`);
     const author = rec.devAgentId;
     this.ledger({ kind: 'fix', repoId: repo.id, pr: rec.prNumber, key: `${rec.round}:${rec.mergeFixes}`, at: Date.now() });
+    this.fixBonds(repo.id, rec.prNumber, dev.id, author);
     this.setQa(rec, { status: 'fixing', devAgentId: dev.id });
     this.beginTask(
       dev,
@@ -3554,6 +3573,7 @@ export class Swarm {
         hair: '#2b2118',
         skin: pick(SKIN),
         style: null,
+        traits: seedTraits(CEO_ID),
         model: CEO_MODEL,
         effort: CEO_EFFORT,
         cli: 'claude',
@@ -4192,8 +4212,61 @@ export class Swarm {
     const board = recordGame(this.state.pong[repoId] ?? [], { players: [a, b], score: game.score, at: Date.now() });
     this.state.pong[repoId] = board;
     this.broadcast({ type: 'pong', repoId, board });
+    if (a.id !== PONG_PLAYER && b.id !== PONG_PLAYER) this.bond(repoId, closeGame(game.score) ? 'close-pong' : 'pong', a.id, b.id, game.score.join('-'));
     this.save();
     return board;
+  }
+
+  // ---------- relationships (#267) ----------
+
+  /** Who fixed each open PR, in order (`${repoId}#${pr}`): fixes that go back and forth make a rivalry. */
+  private fixers = new Map<string, string[]>();
+  /** When each pair last chatted (`${repoId}:${a}:${b}`): every tab on the floor reports the same chat. */
+  private chatted = new Map<string, number>();
+
+  private setSocial(repoId: string, social: SocialView) {
+    this.state.social[repoId] = social;
+    this.broadcast({ type: 'social', repoId, social });
+    this.save();
+  }
+
+  /** Two agents on a floor did something together: their bond grows (shared/relations.ts). */
+  private bond(repoId: string, kind: InteractionKind, a: string, b: string, note = '') {
+    const on = (id: string) => this.state.agents.some((x) => x.id === id && x.repoId === repoId);
+    if (a === b || !on(a) || !on(b)) return;
+    this.setSocial(repoId, interact(this.state.social[repoId] ?? emptySocial(), kind, a, b, Date.now(), note));
+  }
+
+  /** A fix round starts: helping with someone else's PR is a friendship, taking it back from whoever fixed it last a rivalry. */
+  private fixBonds(repoId: string, pr: number, fixer: string, author: string | null) {
+    const key = `${repoId}#${pr}`;
+    const before = this.fixers.get(key) ?? (author ? [author] : []);
+    const owner = before[0]; // who wrote it: the QA record's developer changes to whoever fixes it
+    const last = before[before.length - 1];
+    if (owner && owner !== fixer && !before.slice(1).includes(fixer)) this.bond(repoId, 'fix', fixer, owner, `PR #${pr}`);
+    if (last && last !== fixer && before.includes(fixer)) this.bond(repoId, 'fix-swap', fixer, last, `PR #${pr}`);
+    this.fixers.set(key, [...before, fixer].slice(-6));
+    if (this.fixers.size > 200) this.fixers.delete(this.fixers.keys().next().value!);
+  }
+
+  /** People on a floor chatted at the cooler or the couch (the client runs the chats): a little friendship each pair. */
+  recordChat(repoId: string, body: { ids?: unknown; venue?: unknown }) {
+    this.repo(repoId);
+    const ids = Array.isArray(body.ids) ? [...new Set(body.ids.filter((x): x is string => typeof x === 'string'))] : [];
+    if (ids.length < 2 || ids.length > 4) throw new HttpError(400, 'A chat is two to four agents');
+    if (!ids.every((id) => this.state.agents.some((a) => a.id === id && a.repoId === repoId))) throw new HttpError(400, "Someone in that chat doesn't work on this floor");
+    const venue = typeof body.venue === 'string' ? body.venue.slice(0, 20) : '';
+    const now = Date.now();
+    for (let i = 0; i < ids.length; i++) {
+      for (let j = i + 1; j < ids.length; j++) {
+        const key = `${repoId}:${[ids[i], ids[j]].sort().join(':')}`;
+        if (now - (this.chatted.get(key) ?? 0) < CHAT_REPEAT_MS) continue;
+        this.chatted.set(key, now);
+        this.bond(repoId, 'chat', ids[i], ids[j], venue);
+      }
+    }
+    if (this.chatted.size > 500) for (const [k, at] of this.chatted) if (now - at > CHAT_REPEAT_MS) this.chatted.delete(k);
+    return { ok: true };
   }
 
   // ---------- hire and let-go proposals ----------

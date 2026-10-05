@@ -5,6 +5,8 @@ import type { ProgressView, RewardView } from './progress.ts';
 import type { WeatherSettings, WeatherView, WorldEventSettings } from './outside.ts';
 import type { ThemeSettings } from './themes.ts';
 import type { AgentStyle } from './looks.ts';
+import type { Traits } from './personality.ts';
+import type { SocialView } from './relations.ts';
 
 export type AgentStatus =
   | 'idle' // at desk, nothing assigned
@@ -207,6 +209,7 @@ export interface AgentView {
   hair: string; // hair color
   skin: string;
   style: AgentStyle | null; // the manager's picks in the look editor (null: the look seeded from their id)
+  traits?: Traits; // their personality (shared/personality.ts); absent from older servers and replays: seeded from their id
   model: string; // '' = use the swarm default model, or a model id / alias
   effort: EffortLevel | ''; // '' = use the swarm default effort
   cli: AgentCli | ''; // the CLI they run in the terminal runtime ('' = the office default)
@@ -567,6 +570,7 @@ export interface WorldSnapshot {
   notifyChannels: NotifyChannelsView;
   progress: ProgressView; // coins, decorations and achievements (#210)
   pong: Record<string, PongRow[]>; // each floor's ping-pong leaderboard by repo id, best first
+  social?: Record<string, SocialView>; // each floor's relationships by repo id (shared/relations.ts)
 }
 
 /** What changed about an agent since the office last sent it, with its id; every field for one it never sent. */
@@ -611,6 +615,8 @@ export type ServerEvent =
   | { type: 'progress'; progress: ProgressView }
   | { type: 'reward'; reward: RewardView }
   | { type: 'pong'; repoId: string; board: PongRow[] }
+  /** A floor's relationship graph changed (shared/relations.ts). */
+  | { type: 'social'; repoId: string; social: SocialView }
   | { type: 'toast'; level: 'info' | 'success' | 'error'; text: string }
   // Presence (shared/presence.ts): relayed between the office's tabs, never persisted.
   | { type: 'visitors'; you: string; visitors: VisitorView[] }
