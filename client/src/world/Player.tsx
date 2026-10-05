@@ -35,6 +35,7 @@ import { leavePerch, perch, takePerchTurn, type Perch } from './perch';
 import { roofAction } from './roof/roofState';
 import { greet } from './Chatter';
 import { joinPong, pongCamera, pongMouse, tickPaddle } from './toys/pongState';
+import { radioAction } from '../ui/radio';
 
 /** How fast the right stick moves the ping-pong paddle, full over (in mouse pixels a second). */
 const PAD_PADDLE = 600;
@@ -120,6 +121,10 @@ export function runFocusAction(focus: Focus, via: 'key' | 'click' = 'key') {
   }
   if (focus.action.kind === 'channel') {
     tuneChannel(focus.action.repoId, focus.action.pr);
+    return;
+  }
+  if (focus.action.kind === 'radio') {
+    radioAction();
     return;
   }
   if (focus.action.kind === 'resume') {

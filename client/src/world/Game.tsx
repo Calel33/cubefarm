@@ -30,6 +30,7 @@ import { decorColliders } from './themes/themes';
 import { TypingSounds } from './TypingSounds';
 import { Weather } from './weather/Weather';
 import { WorldEvents } from './events/WorldEvents';
+import { setNewsCapture } from '../news';
 
 // The roof is its own chunk: fetched as the elevator heads up there, never by a floor that doesn't go.
 const loadRoof = () => import('./roof/Roof');
@@ -105,8 +106,14 @@ export function Game() {
       dpr={[1, maxDpr]}
       camera={{ fov: 72, near: 0.05, far: 560, position: [0, 1.65, 10] }}
       gl={{ antialias: true, powerPreference: 'high-performance' }}
-      onCreated={({ gl }) => {
+      onCreated={({ gl, get }) => {
         setOfficeCanvas(gl.domElement);
+        // The Gazette's picture: drawn and read in one go, so it works without preserveDrawingBuffer.
+        setNewsCapture(() => {
+          const s = get();
+          s.gl.render(s.scene, s.camera);
+          return s.gl.domElement.toDataURL('image/jpeg', 0.8);
+        });
         gl.toneMapping = THREE.ACESFilmicToneMapping;
         gl.toneMappingExposure = 1.0;
         gl.shadowMap.type = THREE.PCFSoftShadowMap;

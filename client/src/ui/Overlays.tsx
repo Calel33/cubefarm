@@ -7,6 +7,7 @@ import { Catalogue, DecorBoxPanel } from './Catalogue';
 import { ControlsSettings } from './ControlsSettings';
 import { ElevatorPanel } from './ElevatorPanel';
 import { FloorList } from './FloorList';
+import { Gazette } from './Gazette';
 import { Key, MoveKeys } from './Key';
 import { Interview } from './Interview';
 import { KanbanView } from './KanbanView';
@@ -419,5 +420,7 @@ export function Overlays() {
       return <DecorBoxPanel repoId={overlay.repoId} />;
     case 'floorList':
       return <FloorList />;
+    case 'gazette':
+      return <Gazette id={overlay.id} />;
   }
 }
