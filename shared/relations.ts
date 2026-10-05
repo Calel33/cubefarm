@@ -44,8 +44,8 @@ export const GAINS: Record<InteractionKind, { friend: number; rival: number }> =
 };
 
 /** At this much a bond counts as a friendship, or a rivalry. */
-export const FRIEND_AT = 30;
-export const RIVAL_AT = 30;
+export const FRIEND_AT = 25;
+export const RIVAL_AT = 25;
 export const BOND_MAX = 100;
 /** Without contact a bond halves this often. */
 export const HALF_LIFE_MS = 5 * 24 * 3_600_000;
