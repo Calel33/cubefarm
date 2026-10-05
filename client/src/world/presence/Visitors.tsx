@@ -6,6 +6,7 @@ import { EMOTE_EMOJI } from '../../../../shared/presence';
 import type { VisitorHeld } from '../../../../shared/types';
 import type { Agent } from '../../store';
 import { appearanceFor } from '../appearance';
+import { Batches } from '../Batched';
 import { gait, type Gait, type Gesture } from '../body';
 import { Character } from '../Character';
 import { SANS, roundRect } from '../draw';
@@ -73,11 +74,12 @@ export function visitorAgent(id: string, name: string, color: string): Agent {
 export function Visitors() {
   useSyncExternalStore(subscribePresence, presenceVersion);
   return (
-    <>
+    // in instanced batches of their own (world/Batched.tsx), with no shadows and no outlines far away, as below
+    <Batches shadows={false} outlineRange={OUTLINE_FAR}>
       {drawnVisitors().map((id) => (
         <VisitorFigure key={id} id={id} />
       ))}
-    </>
+    </Batches>
   );
 }
 

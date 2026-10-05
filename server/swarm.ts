@@ -38,6 +38,7 @@ import { sampleDay, seeded } from './journalSample.ts';
 import { addTenure, apply as applyLedger, buy as buyDecor, emptyLedger, grant as grantCoins, loadLedger, place as placeDecor, progressView, type CommandResult, type Effects, type LedgerEvent, type LedgerState } from './ledger.ts';
 import { AgentTerminal } from './terminal.ts';
 import { Ticker } from './ticker.ts';
+import { Outbox } from './outbox.ts';
 import { DEFAULT_LISTEN, DEFAULT_VOICE, listenSettings, speaks, Voice, voiceSettings } from './voice.ts';
 import { Notifier } from './notifier.ts';
 import { clip, plainText, stuckAgents } from './notify.ts';
@@ -218,7 +219,6 @@ interface Shot {
 
 interface AgentRuntime {
   log: LogLine[];
-  pending: LogLine[];
   session: SessionHandle | null;
   currentTool: string | null;
   browserUrl: string | null;
@@ -510,12 +510,16 @@ export class Swarm {
   private deskAlerts = new Map<string, string>(); // agent id -> the desk setup error the manager was last told about
   private prepStrikes = new Map<string, PrepStrikes>(); // `${repoId}#${pr}:${task}` -> its desks that couldn't be set up
   private dropping = new Map<string, string>(); // agent id -> why their task's issue or PR closed: the desk clears once the session ends
-  private clients = new Set<WebSocket>();
+  // Everything sent to the tabs on /ws: agent and floor changes batched as patches, terminal lines only where shown.
+  private outbox = new Outbox({
+    agents: () => this.state.agents.map((a) => ({ id: a.id, floor: this.floorOf(a) })),
+    log: (id) => this.agentRt.get(id)?.log ?? [],
+    beforeFlush: (ids) => this.updateSigns(ids),
+  });
   private user: string | null = null;
   private ghError: string | undefined;
   private saveTimer: NodeJS.Timeout | null = null;
   private writing: Promise<void> = Promise.resolve(); // state file writes, one at a time: they share its temp file
-  private flushTimer: NodeJS.Timeout | null = null;
   private logSeq = 1;
   private previews: Previews;
   private officeHead: string | null = null; // the commit the office runs (null: not a git checkout, so no self-update)
@@ -685,7 +689,7 @@ export class Swarm {
     for (const a of this.state.agents) {
       const tail = a.logTail ?? [];
       for (const l of tail) this.logSeq = Math.max(this.logSeq, l.id + 1);
-      this.agentRt.set(a.id, { log: tail, pending: [], session: null, currentTool: null, browserUrl: null, screenshot: await loadScreen(a.id), shots: [], terminal: await this.loadTerminal(a.id) });
+      this.agentRt.set(a.id, { log: tail, session: null, currentTool: null, browserUrl: null, screenshot: await loadScreen(a.id), shots: [], terminal: await this.loadTerminal(a.id) });
     }
     // CLIs the terminal keeper kept running through the restart go back into their terminals, and busy ones carry on.
     // (The CEO's session is resumed instead: its office tools live in this process.)
@@ -728,7 +732,9 @@ export class Swarm {
       Object.assign(this.state.settings, { setupDone: true, managerName: 'Demo Manager', companyName: 'Demo Co.' });
       for (const r of await this.backend.listMyRepos()) {
         const repo = await this.connectRepo(r.nameWithOwner);
-        for (let i = 0; i < (repo.floor === 1 ? 5 : 3); i++) this.hireAgent(repo.id, {});
+        const team = this.backend.demoTeam?.(repo.floor) ?? { dev: 3, qa: 1 };
+        for (let i = 0; i < team.dev; i++) this.hireAgent(repo.id, {});
+        for (let i = 1; i < team.qa; i++) this.hireAgent(repo.id, { role: 'qa' }); // connecting hired the first
         this.updateRepo(repo.id, { autoAssign: true });
       }
       // Mission control opens on a week that already happened.
@@ -786,6 +792,14 @@ export class Swarm {
     // A fresh demo office has yesterday to replay too.
     if (this.backend.demo) void this.journal.hasPastDays().then((has) => (has ? undefined : this.journalSample())).catch((err) => console.warn('could not write the sample day', err));
     this.save();
+    // Tabs connect after this, so each one's snapshot has at least these: later changes go out as patches on them.
+    this.outbox.seed(
+      this.state.agents.map((a) => {
+        const { log: _log, ...view } = this.agentView(a, false);
+        return view;
+      }),
+      this.state.repos.map((r) => this.repoView(r)),
+    );
     setTimeout(() => this.schedule(), 1000);
   }
 
@@ -936,7 +950,8 @@ export class Swarm {
       workspaceRoot: WORKSPACE_ROOT,
       settings: this.state.settings,
       repos: this.state.repos.map((r) => this.repoView(r)),
-      agents: this.state.agents.map((a) => this.agentView(a, true)),
+      // no terminal lines: each tab asks for the ones it shows (shared/watch.ts)
+      agents: this.state.agents.map((a) => this.agentView(a, false)),
       qa: this.state.qa.map((q) => this.qaView(q)),
       prPreviews: this.previews.prViews(),
       requests: this.state.requests,
@@ -972,13 +987,23 @@ export class Swarm {
   // ---------- clients ----------
 
   addClient(ws: WebSocket) {
-    this.clients.add(ws);
-    ws.on('close', () => this.clients.delete(ws));
-    // A tab back from the time-lapse asks for the live office again.
+    this.outbox.add(ws);
+    ws.on('close', () => this.outbox.remove(ws));
     ws.on('message', (raw) => {
-      if (isResync(raw)) this.send(ws, { type: 'snapshot', data: this.snapshot() });
+      // A tab back from the time-lapse asks for the live office again, and the terminal lines it shows with it;
+      // otherwise it's saying what it shows (shared/watch.ts).
+      if (isResync(raw)) {
+        this.send(ws, { type: 'snapshot', data: this.snapshot() });
+        this.outbox.resync(ws);
+      } else this.outbox.receive(ws, String(raw));
     });
     this.send(ws, { type: 'snapshot', data: this.snapshot() });
+  }
+
+  /** The floor an agent's desk is on, for routing their terminal lines: 0 for the CEO in the lobby, null for none. */
+  private floorOf(a: PersistedAgent): number | null {
+    if (a.role === 'ceo') return 0;
+    return this.state.repos.find((r) => r.id === a.repoId)?.floor ?? null;
   }
 
   private send(ws: WebSocket, ev: ServerEvent) {
@@ -986,8 +1011,12 @@ export class Swarm {
   }
 
   private broadcast(ev: ServerEvent) {
-    const msg = JSON.stringify(ev);
-    for (const ws of this.clients) if (ws.readyState === ws.OPEN) ws.send(msg);
+    this.outbox.broadcast(ev);
+    this.observe(ev);
+  }
+
+  /** What follows from an event besides the tabs hearing it: ticker lines and mission control's numbers. */
+  private observe(ev: ServerEvent) {
     for (const item of this.ticker.observe(ev)) this.broadcast({ type: 'ticker', item });
     if (OPS_EVENTS.has(ev.type)) this.opsSoon();
     this.journal.record(ev);
@@ -1013,7 +1042,10 @@ export class Swarm {
   }
 
   private emitRepo(r: PersistedRepo) {
-    this.broadcast({ type: 'repo', repo: this.repoView(r) });
+    const repo = this.repoView(r);
+    this.observe({ type: 'repo', repo });
+    // to the tabs with the next batch: a big company syncs and merges many times a minute
+    this.outbox.repo(repo);
   }
 
   private emitAgent(a: PersistedAgent) {
@@ -1021,7 +1053,9 @@ export class Swarm {
     if (!this.agentRt.has(a.id)) return;
     const { log: _log, ...rest } = this.agentView(a, false);
     this.shownActivity.set(a.id, rest.activity ?? null);
-    this.broadcast({ type: 'agent', agent: rest });
+    this.observe({ type: 'agent', agent: rest });
+    // to the tabs with the next batch: a busy agent changes tools many times a minute
+    this.outbox.agent(rest);
   }
 
   private setQa(rec: QaRecord, patch: Partial<QaRecord>) {
@@ -1040,28 +1074,25 @@ export class Swarm {
     const rt = this.agentRt.get(a.id);
     if (!rt) return;
     const t = Date.now();
+    const lines: LogLine[] = [];
     for (const e of entries) {
       const line: LogLine = { id: this.logSeq++, t, kind: e.kind, text: e.text, tool: e.tool };
       rt.log.push(line);
-      rt.pending.push(line);
+      lines.push(line);
       const act = lineActivity(line);
       if (act) this.seenActivity.set(a.id, { ...act, at: t });
     }
     if (rt.log.length > LOG_BUFFER) rt.log.splice(0, rt.log.length - LOG_BUFFER);
-    if (!this.flushTimer) this.flushTimer = setTimeout(() => this.flushLogs(), 120);
+    this.outbox.log(a.id, lines);
+    this.save();
   }
 
-  private flushLogs() {
-    this.flushTimer = null;
-    for (const [agentId, rt] of this.agentRt) {
-      if (rt.pending.length === 0) continue;
-      this.broadcast({ type: 'log', agentId, lines: rt.pending });
-      rt.pending = [];
-      // A new action changes the sign over their head; tool changes already sent most of them.
-      const a = this.state.agents.find((x) => x.id === agentId);
-      if (a && !sameActivity(this.activityOf(a), this.shownActivity.get(agentId))) this.emitAgent(a);
+  /** Before new lines go out: a new action changes the sign over their head (tool changes already sent most of them). */
+  private updateSigns(agentIds: string[]) {
+    for (const id of agentIds) {
+      const a = this.state.agents.find((x) => x.id === id);
+      if (a && !sameActivity(this.activityOf(a), this.shownActivity.get(id))) this.emitAgent(a);
     }
-    this.save();
   }
 
   // ---------- persistence ----------
@@ -1895,7 +1926,7 @@ export class Swarm {
     };
     this.state.agents.push(agent);
     applyLedger(this.state.progress, { kind: 'hired', agentId: agent.id, at: Date.now() });
-    this.agentRt.set(agent.id, { log: [], pending: [], session: null, currentTool: null, browserUrl: null, screenshot: null, shots: [], terminal: null });
+    this.agentRt.set(agent.id, { log: [], session: null, currentTool: null, browserUrl: null, screenshot: null, shots: [], terminal: null });
     this.appendLog(agent, [
       { kind: 'system', text: role === 'qa' ? `🔍 ${name} joined the QA lab on floor ${repo.floor} (${repo.fullName}).` : `👋 ${name} joined floor ${repo.floor} (${repo.fullName}).` },
       ...(agent.title ? [{ kind: 'system' as const, text: `🪪 ${agent.title}${agent.specialty ? ` · takes swarm:${agent.specialty} issues first` : ''}` }] : []),
@@ -3542,7 +3573,7 @@ export class Swarm {
         logTail: [],
       };
       this.state.agents.push(a);
-      this.agentRt.set(a.id, { log: [], pending: [], session: null, currentTool: null, browserUrl: null, screenshot: null, shots: [], terminal: null });
+      this.agentRt.set(a.id, { log: [], session: null, currentTool: null, browserUrl: null, screenshot: null, shots: [], terminal: null });
       this.appendLog(a, [{ kind: 'system', text: `🏛️ ${a.name} moved into the corner office. The CEO studies every floor, shapes its team and plans its work.` }]);
     }
     const i = interrupted.indexOf(a);

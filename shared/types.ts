@@ -227,7 +227,7 @@ export interface AgentView {
   screenshotAt: number | null;
   lastError: string | null;
   career: CareerView | null; // their record on the team (#226); null for the CEO
-  log: LogLine[]; // tail of the terminal log (full buffer on snapshot)
+  log: LogLine[]; // the terminal log: hiring answers with it; snapshots leave it empty (tabs get lines by watch, shared/watch.ts)
   activity?: AgentActivity | null; // what they're doing right now, safe to show anyone (null: nothing, e.g. idle)
 }
 
@@ -569,13 +569,25 @@ export interface WorldSnapshot {
   pong: Record<string, PongRow[]>; // each floor's ping-pong leaderboard by repo id, best first
 }
 
+/** What changed about an agent since the office last sent it, with its id; every field for one it never sent. */
+export type AgentPatch = Partial<Omit<AgentView, 'log'>> & { id: string };
+/** The same for a floor. */
+export type RepoPatch = Partial<RepoView> & { id: string };
+
 export type ServerEvent =
   | { type: 'snapshot'; data: WorldSnapshot }
   | { type: 'repo'; repo: RepoView }
+  /** Floor changes batched by the office (server/outbox.ts), like agents'. */
+  | { type: 'repos'; repos: RepoPatch[] }
   | { type: 'repoRemoved'; repoId: string }
   | { type: 'agent'; agent: Omit<AgentView, 'log'> }
+  /** Agent changes batched by the office (server/outbox.ts), a few times a second at most. */
+  | { type: 'agents'; agents: AgentPatch[] }
   | { type: 'agentRemoved'; agentId: string }
-  | { type: 'log'; agentId: string; lines: LogLine[] }
+  /** New terminal lines of the agents this tab watches (shared/watch.ts); `catchUp`: their recent buffer, replacing what it had. */
+  | { type: 'logs'; tails: Record<string, LogLine[]>; catchUp?: boolean }
+  /** The latest line worth listing of agents it doesn't watch, for the workers list. */
+  | { type: 'latest'; lines: Record<string, LogLine> }
   | { type: 'screen'; agentId: string; url: string | null; at: number }
   | { type: 'qa'; qa: QaView }
   | { type: 'qaRemoved'; repoId: string; prNumber: number }
@@ -605,6 +617,17 @@ export type ServerEvent =
   | ({ type: 'visitorPose'; id: string } & VisitorPose)
   | { type: 'visitorEmote'; id: string; e: EmoteId }
   | { type: 'visitorPing'; id: string; x: number; y: number; z: number; label: string };
+
+/** What a tab shows of the agents' terminals, so the office sends it only those lines (shared/watch.ts). */
+export interface Watch {
+  /** The floor the tab is on (0: the lobby, where the CEO sits); -1 before it has said. */
+  floor: number;
+  /** Agents whose panel is open (their terminal, the CEO's in the console). */
+  agents: string[];
+  /** The workers list is showing: the latest line of every agent. */
+  workers: boolean;
+}
+
 
 // ---------- presence: everyone viewing the office appears in it as a visitor ----------
 
@@ -639,8 +662,11 @@ export interface VisitorPose {
 
 export type EmoteId = 'wave' | 'thumbs' | 'clap' | 'point' | 'laugh';
 
-/** Browser to server on /ws. resync: send a fresh snapshot (a tab back from the time-lapse replay). The rest: presence. */
-export type ClientEvent = { type: 'resync' } | PresenceEvent;
+/**
+ * Browser to server on /ws. resync: send a fresh snapshot (a tab back from the time-lapse replay); lines: which
+ * agents' terminal lines this tab shows (shared/watch.ts). The rest: presence.
+ */
+export type ClientEvent = { type: 'resync' } | ({ type: 'lines' } & Watch) | PresenceEvent;
 
 /**
  * A tab's presence (shared/presence.ts). hello: your name and colour · pose: you're in the office and appear to others ·

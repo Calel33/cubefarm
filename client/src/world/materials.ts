@@ -27,6 +27,14 @@ export function toon(color: string, opts: { emissive?: string; emissiveIntensity
   return m;
 }
 
+/**
+ * For instanced batches (batch.ts): white toon and unlit materials, so each instance's own colour shows, exactly as
+ * toon(color) and glow(color) would draw it. Made once; a batch never shares them with plain meshes.
+ */
+export const batchToon = new THREE.MeshToonMaterial({ color: '#ffffff', gradientMap: ramp });
+export const batchGlow = markBloom(new THREE.MeshBasicMaterial({ color: '#ffffff', toneMapped: false }));
+export const batchGlowNight = markBloom(new THREE.MeshBasicMaterial({ color: '#ffffff', toneMapped: false }), 'night');
+
 /** A toon material that shows a texture (e.g. the beach ball's stripes), cached by key. */
 export function toonMap(key: string, map: THREE.Texture) {
   const k = `map|${key}`;

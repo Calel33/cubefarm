@@ -1,9 +1,20 @@
 import { useStore } from './store';
 import { restartExpected, shouldReload } from './officeUpdate';
 import type { ClientEvent, ServerEvent } from '../../shared/types';
+import { currentWatch } from './watch';
 
 let retry = 0;
 let socket: WebSocket | null = null;
+let sentWatch = '';
+
+/** Tells the office what this tab shows (watch.ts) whenever that changes, so it sends only the lines it needs. */
+function sendWatch() {
+  const watch = JSON.stringify({ type: 'lines', ...currentWatch(useStore.getState()) } satisfies ClientEvent);
+  if (socket?.readyState !== WebSocket.OPEN || watch === sentWatch) return;
+  sentWatch = watch;
+  socket.send(watch);
+}
+let watching = false;
 // Back from the time-lapse: everything waits for the fresh snapshot asked for, so nothing applies on top of the replay.
 let awaitingSnapshot = false;
 // Presence too: the other visitors are live people, there in a replay as much as in the live office.
@@ -54,13 +65,20 @@ function reloadForNewCommit(commit: string): boolean {
 }
 
 export function connect() {
+  // subscribed here, not as the module loads: the store imports this module (through presence) before it exists
+  if (!watching) {
+    watching = true;
+    useStore.subscribe(sendWatch);
+  }
   const proto = location.protocol === 'https:' ? 'wss' : 'ws';
   const ws = new WebSocket(`${proto}://${location.host}/ws`);
   socket = ws;
   ws.onopen = () => {
     retry = 0;
+    sentWatch = '';
     opens++;
     useStore.getState().setConnected(true);
+    sendWatch();
   };
   ws.onmessage = (e) => {
     wsTraffic.in += typeof e.data === 'string' ? e.data.length : 0;

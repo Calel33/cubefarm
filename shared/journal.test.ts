@@ -165,7 +165,8 @@ describe('redact', () => {
 describe('journalEvent: what is kept', () => {
   it('never keeps terminal output, screens, settings, keys, toasts or snapshots', () => {
     const dropped: ServerEvent[] = [
-      { type: 'log', agentId: 'ada', lines: [{ id: 1, t: 1, kind: 'text', text: `export TOKEN=${SECRETS.env}` }] },
+      { type: 'logs', tails: { ada: [{ id: 1, t: 1, kind: 'text', text: `export TOKEN=${SECRETS.env}` }] } },
+      { type: 'latest', lines: { ada: { id: 1, t: 1, kind: 'text', text: `export TOKEN=${SECRETS.env}` } } },
       { type: 'screen', agentId: 'ada', url: 'http://localhost', at: 1 },
       { type: 'toast', level: 'error', text: `failed: ${SECRETS.env}` },
       { type: 'voiceKey', voiceKeySet: true, voiceKeyHint: 'cdef' },

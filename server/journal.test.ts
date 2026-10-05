@@ -247,7 +247,7 @@ describe('Journal', () => {
   });
 
   it('never writes secrets or terminal output', async () => {
-    emit({ type: 'log', agentId: 'ada', lines: [{ id: 1, t: now, kind: 'text', text: 'npm test output: 42 passing' }] });
+    emit({ type: 'logs', tails: { ada: [{ id: 1, t: now, kind: 'text', text: 'npm test output: 42 passing' }] } });
     emit({ type: 'message', message: { id: 1, from: 'manager', text: `here is the key ${SECRET}`, at: now } });
     setAgent({ lastError: 'stack trace here', issueTitle: `Use ${SECRET}` });
     emit({ type: 'toast', level: 'error', text: 'toast text' });

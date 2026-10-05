@@ -6,6 +6,7 @@ import { setOfficeCanvas, usePhotoGate } from '../photo/gate';
 import { repoOnFloor, useStore } from '../store';
 import { useA11y } from '../ui/a11y';
 import { ding, whoosh } from '../ui/sfx';
+import { Batches } from './Batched';
 import { CameraRig } from './camera/CameraRig';
 import { Chatter } from './Chatter';
 import { CUT_PLANES } from './camera/rig';
@@ -118,7 +119,10 @@ export function Game() {
       <DayLights />
       <City />
       <WorldEvents kind={onRoof ? 'roof' : isOffice ? 'office' : 'lobby'} />
-      <Suspense fallback={null}>{onRoof ? <Roof top={top} /> : repo ? <OfficeFloor key={repo.id} repo={repo} /> : <Lobby />}</Suspense>
+      {/* the floor's repeated parts (desks, chairs, props, people) are drawn as instanced batches (Batched.tsx) */}
+      <Batches key={onRoof ? 'roof' : (repo?.id ?? 'lobby')}>
+        <Suspense fallback={null}>{onRoof ? <Roof top={top} /> : repo ? <OfficeFloor key={repo.id} repo={repo} /> : <Lobby />}</Suspense>
+      </Batches>
       {!onRoof && <Outside key={isOffice ? floor : 0} kind={isOffice ? 'office' : 'lobby'} floor={isOffice ? floor : 0} top={top} />}
       <ThemeLayer key={onRoof ? ROOF : isOffice ? floor : 0} kind={onRoof ? 'roof' : isOffice ? 'office' : 'lobby'} floor={onRoof ? ROOF : isOffice ? floor : 0} top={top} repoId={repo?.id ?? null} />
       <Player colliders={colliders} floor={floor} />
