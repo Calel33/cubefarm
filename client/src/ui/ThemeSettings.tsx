@@ -1,8 +1,10 @@
 // The Settings tab's Themes section: holiday themes by date (auto), never (off), or one forced on; holidays the office
-// doesn't celebrate switched off one by one; and the manager's birthday (day and month, kept on the server).
+// doesn't celebrate switched off one by one; and the manager's birthday (day and month, kept on the server). Mods'
+// themes (docs/mods.md) are listed beside the holidays with a "mod" badge.
 import { useId } from 'react';
 import { api } from '../api';
 import { useStore } from '../store';
+import { activeMods, modDatesLabel } from '../../../shared/mods';
 import { DEFAULT_THEME_SETTINGS, THEME_IDS, THEME_INFO, type ThemeMode, type ThemeSettings as Themes } from '../../../shared/themes';
 import { useTheme } from '../world/themes/active';
 
@@ -11,6 +13,8 @@ const DAYS = [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
 
 export function ThemeSettings() {
   const themes = useStore((s) => s.settings.themes) ?? DEFAULT_THEME_SETTINGS;
+  const mods = useStore((s) => s.mods);
+  const modThemes = activeMods(mods).flatMap((m) => m.themes);
   const now = useTheme();
   const radio = useId();
   const save = (patch: Partial<Themes>) => void api.updateSettings({ themes: { ...themes, ...patch } }).catch(() => undefined);
@@ -23,7 +27,11 @@ export function ThemeSettings() {
       <h3>🎉 Themes</h3>
       <p className="muted small">
         The office dresses up for the holidays: decorations, costumes, music and a few surprises.{' '}
-        {now.id ? (
+        {now.mod ? (
+          <>
+            Now: <b>{`${now.mod.emoji} ${now.mod.name}`}</b> <span className="chip mod-badge">mod</span> ({source}).
+          </>
+        ) : now.id ? (
           <>
             Now: <b>{`${THEME_INFO[now.id].emoji} ${THEME_INFO[now.id].name}`}</b> ({source}).
           </>
@@ -55,6 +63,11 @@ export function ThemeSettings() {
                   {`${THEME_INFO[id].emoji} ${THEME_INFO[id].name}`}
                 </option>
               ))}
+              {modThemes.map((t) => (
+                <option key={t.key} value={t.key}>
+                  {`${t.emoji} ${t.name} · mod`}
+                </option>
+              ))}
             </select>
           </span>
         </label>
@@ -68,6 +81,16 @@ export function ThemeSettings() {
           </span>
         </label>
       ))}
+      {modThemes
+        .filter((t) => t.dates)
+        .map((t) => (
+          <label key={t.key} className="toggle block">
+            <input type="checkbox" checked={!themes.disabled.includes(t.key)} onChange={(e) => save({ disabled: e.target.checked ? themes.disabled.filter((x) => x !== t.key) : [...themes.disabled, t.key] })} />
+            <span>
+              {`${t.emoji} ${t.name}`} <span className="chip mod-badge">mod</span> <span className="muted small">({modDatesLabel(t.dates)})</span>
+            </span>
+          </label>
+        ))}
       <div className="field">Your birthday (the team throws a party; it beats any other theme that day)</div>
       <div className="row">
         <select value={b?.month ?? 0} onChange={(e) => setBirthday(Number(e.target.value), b?.day ?? 1)} aria-label="Birthday month">

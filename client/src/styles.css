@@ -234,6 +234,46 @@ input.inline:focus {
 .chip-good {
   background: #b9fbc0;
 }
+/* a mod's own item (docs/mods.md) */
+.mod-badge {
+  background: #c8b6ff;
+}
+.mod-off {
+  opacity: 0.7;
+}
+.mod-errors {
+  margin: 6px 0;
+  padding-left: 18px;
+  color: #a4133c;
+  font-size: 0.85rem;
+}
+.mod-gallery {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 8px;
+  margin-top: 8px;
+}
+.mod-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 8px;
+  border: 1.5px solid var(--ink);
+  border-radius: 10px;
+  background: #fff;
+  text-align: center;
+  font-size: 0.8rem;
+}
+.mod-item img {
+  max-width: 100%;
+  max-height: 110px;
+  border-radius: 4px;
+}
+.mod-item-icon {
+  font-size: 2rem;
+  line-height: 1.2;
+}
 .pill-ok {
   background: #b9fbc0;
 }

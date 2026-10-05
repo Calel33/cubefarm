@@ -6,6 +6,8 @@ import { setOfficeCanvas, usePhotoGate } from '../photo/gate';
 import { repoOnFloor, useStore } from '../store';
 import { useA11y } from '../ui/a11y';
 import { ding, whoosh } from '../ui/sfx';
+import { ModLayer, useModPlacements } from '../mods/ModLayer';
+import { modColliders } from '../mods/placing';
 import { Batches } from './Batched';
 import { CameraRig } from './camera/CameraRig';
 import { Chatter } from './Chatter';
@@ -80,12 +82,13 @@ export function Game() {
   const top = useStore((s) => s.repos.reduce((m, r) => Math.max(m, r.floor), 0));
   const placed = useStore((s) => (repo ? s.progress.floors[repo.id]?.placed : undefined));
   const theme = useTheme((s) => s.id);
+  const modPlaced = useModPlacements(onRoof ? 'roof' : isOffice ? 'office' : 'lobby');
   const colliders = useMemo(
     () =>
       onRoof
         ? roofColliders()
-        : [...(isOffice ? [...officeColliders(), ...decorRects(placed ?? {})] : lobbyColliders()), ...decorColliders(theme, isOffice ? 'office' : 'lobby')],
-    [onRoof, isOffice, placed, theme],
+        : [...(isOffice ? [...officeColliders(), ...decorRects(placed ?? {})] : lobbyColliders()), ...decorColliders(theme, isOffice ? 'office' : 'lobby'), ...modColliders(modPlaced)],
+    [onRoof, isOffice, placed, theme, modPlaced],
   );
   const toRoof = useStore((s) => s.travel?.to === ROOF);
   useEffect(() => {
@@ -125,6 +128,7 @@ export function Game() {
       </Batches>
       {!onRoof && <Outside key={isOffice ? floor : 0} kind={isOffice ? 'office' : 'lobby'} floor={isOffice ? floor : 0} top={top} />}
       <ThemeLayer key={onRoof ? ROOF : isOffice ? floor : 0} kind={onRoof ? 'roof' : isOffice ? 'office' : 'lobby'} floor={onRoof ? ROOF : isOffice ? floor : 0} top={top} repoId={repo?.id ?? null} />
+      <ModLayer key={`mods:${onRoof ? ROOF : isOffice ? floor : 0}`} kind={onRoof ? 'roof' : isOffice ? 'office' : 'lobby'} placed={modPlaced} />
       <Player colliders={colliders} floor={floor} />
       <Presence />
       <FieldOfView />

@@ -837,9 +837,26 @@ export function trackFor(i: number): Track {
   return t;
 }
 
-/** Holiday song `n` of `ids` (a theme's playlist, wrapping round), compiled once; null when it names none. */
+// Mods' songs (docs/mods.md), by their key (`mod:<mod>/<id>`): played in turns like the holiday songs.
+const modSongs = new Map<string, Song>();
+
+/** The switched-on mods' songs; one whose patterns don't compile is left out rather than stop the jukebox. */
+export function setModSongs(songs: readonly Song[]) {
+  modSongs.clear();
+  for (const id of tracks.keys()) if (id.startsWith('mod:')) tracks.delete(id);
+  for (const song of songs) {
+    try {
+      tracks.set(song.id, compileSong(song));
+      modSongs.set(song.id, song);
+    } catch (err) {
+      console.warn(`mod song ${song.id} left out:`, err);
+    }
+  }
+}
+
+/** Holiday (or mod) song `n` of `ids` (a theme's playlist, wrapping round), compiled once; null when it names none. */
 export function holidayTrack(ids: readonly string[], n: number): Track | null {
-  const list = ids.map((id) => HOLIDAY_SONGS.find((s) => s.id === id)).filter((s): s is Song => !!s);
+  const list = ids.map((id) => HOLIDAY_SONGS.find((s) => s.id === id) ?? modSongs.get(id)).filter((s): s is Song => !!s);
   if (!list.length) return null;
   const song = list[((n % list.length) + list.length) % list.length];
   let t = tracks.get(song.id);

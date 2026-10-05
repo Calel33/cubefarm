@@ -10,7 +10,8 @@ import { noise, tone, type Vec3 } from '../ui/sfx';
 import { useKeyName } from '../ui/controls';
 import { roundRect, SANS } from './draw';
 import { useCanvasTexture, useInteractable } from './interact';
-import { SONGS, beatAt, beatPulse, firstSongFor, holidayTrack, isFocusSong, moodOf, nextSong, noteAge, parseStation, stationSongs, trackFor, type Song, type Station } from './jukeboxSongs';
+import { activeMods, type ModsView } from '../../../shared/mods';
+import { SONGS, beatAt, beatPulse, firstSongFor, holidayTrack, isFocusSong, moodOf, nextSong, noteAge, parseStation, setModSongs, stationSongs, trackFor, type Song, type Station } from './jukeboxSongs';
 import { HALF_D, JUKEBOX } from './layout';
 import { themeSongs } from './themes/active';
 import { markBloom } from './gfx/bloomMarks';
@@ -47,14 +48,24 @@ const listeners = new Set<() => void>();
 
 const songIndex = (floor: number) => songs.get(floor) ?? firstSongFor(floor, stationFor(floor));
 
-// While a holiday theme is on, its songs (themes.ts) take turns with the usual ones on the All station: per floor,
-// whether the theme's song is up next, and which of them.
+// While a holiday theme is on, its songs (themes.ts) take turns with the usual ones on the All station, and so do the
+// mods' songs (docs/mods.md) on their station (a Focus one on Focus and All): per floor, whether one of those is up
+// next, and which of them.
 const holiday = new Map<number, { turn: boolean; n: number }>();
 
-/** The theme's song this floor plays now, or null (no theme, Focus, or the usual song's turn). */
+const modSongsOf = (mods: ModsView) => activeMods(mods).flatMap((m) => m.songs);
+const loadModSongs = (mods: ModsView) => setModSongs(modSongsOf(mods).map((s): Song => s.song));
+loadModSongs(useStore.getState().mods);
+useStore.subscribe((s, prev) => {
+  if (s.mods !== prev.mods) loadModSongs(s.mods);
+});
+
+/** The theme's (or a mod's) song this floor plays now, or null (none, or the usual song's turn). */
 function holidayNow(floor: number) {
-  const ids = themeSongs();
-  if (!ids.length || stationFor(floor) !== 'all') return null;
+  const station = stationFor(floor);
+  const mods = modSongsOf(useStore.getState().mods).filter((s) => station === 'all' || s.station === 'focus');
+  const ids = [...(station === 'all' ? themeSongs() : []), ...mods.filter((s) => !themeSongs().includes(s.key)).map((s) => s.key)];
+  if (!ids.length) return null;
   let h = holiday.get(floor);
   if (!h) holiday.set(floor, (h = { turn: true, n: floor }));
   return h.turn ? holidayTrack(ids, h.n) : null;

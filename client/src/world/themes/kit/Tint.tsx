@@ -35,7 +35,7 @@ interface LightMemo {
   last: THREE.Color;
 }
 
-export function Tint({ def }: { def: ThemeDef }) {
+export function Tint({ def }: { def: Pick<ThemeDef, 'tint' | 'sky'> }) {
   const scene = useThree((s) => s.scene);
   const dome = useRef<THREE.Mesh>(null);
   const st = useMemo(

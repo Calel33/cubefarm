@@ -2,6 +2,7 @@ import type { ComponentType } from 'react';
 import type { Object3D } from 'three';
 import { create } from 'zustand';
 import { useStore, type Agent } from '../../store';
+import { activeMods, type ModThemeView } from '../../../../shared/mods';
 import { DEFAULT_THEME_SETTINGS, dayKey, parseDateParam, parseThemeParam, resolveTheme, type ThemeId, type ThemeMode, type ThemeSource } from '../../../../shared/themes';
 import type { Appearance } from '../appearance';
 import { placeDecor, THEMES } from './themes';
@@ -9,7 +10,8 @@ import { placeDecor, THEMES } from './themes';
 // The holiday theme on screen, live: shared/themes.ts picks it from the date and Settings → Themes, re-checked every
 // few seconds so it turns on and off at midnight. QA: ?theme=halloween (or auto / off) and ?date=2026-12-31T23:59:50
 // override them, and window.__swarmTheme reads and moves both. The theme's lazy chunk (ThemeLayer.tsx) plugs its
-// costumes, its E actions and its own probe calls in here while it's mounted.
+// costumes, its E actions and its own probe calls in here while it's mounted. A mod's theme (docs/mods.md) comes as
+// `mod`, with `id` null; the mods' layer (mods/ModLayer.tsx) draws it.
 
 const search = typeof window !== 'undefined' ? window.location.search : '';
 let override: ThemeMode | null = parseThemeParam(search);
@@ -26,12 +28,17 @@ export interface ThemeState {
   source: ThemeSource;
   /** Today's local date (YYYY-MM-DD): daily things (the egg hunt, presents) reset when it changes. */
   day: string;
+  /** A switched-on mod's theme that's on instead of a holiday's. */
+  mod: ModThemeView | null;
 }
 
 function compute(): ThemeState {
   const now = new Date(themeNow());
-  const settings = useStore.getState().settings.themes ?? DEFAULT_THEME_SETTINGS;
-  return { ...resolveTheme(now, settings, override), day: dayKey(now) };
+  const s = useStore.getState();
+  const settings = s.settings.themes ?? DEFAULT_THEME_SETTINGS;
+  const mods = activeMods(s.mods).flatMap((m) => m.themes);
+  const r = resolveTheme(now, settings, override, mods);
+  return { id: r.id, source: r.source, day: dayKey(now), mod: (r.mod && mods.find((t) => t.key === r.mod)) || null };
 }
 
 export const useTheme = create<ThemeState>(() => compute());
@@ -40,22 +47,22 @@ export const useTheme = create<ThemeState>(() => compute());
 export function refreshTheme() {
   const next = compute();
   const cur = useTheme.getState();
-  if (next.id !== cur.id || next.source !== cur.source || next.day !== cur.day) useTheme.setState(next);
+  if (next.id !== cur.id || next.source !== cur.source || next.day !== cur.day || next.mod !== cur.mod) useTheme.setState(next);
 }
 
 useStore.subscribe((s, prev) => {
-  if (s.settings.themes !== prev.settings.themes) refreshTheme();
+  if (s.settings.themes !== prev.settings.themes || s.mods !== prev.mods) refreshTheme();
 });
 if (typeof window !== 'undefined') setInterval(refreshTheme, 5000);
 
 /** The active theme's song ids, played first by the jukebox (jukeboxSongs.ts playlist()). */
 export const themeSongs = (): readonly string[] => {
-  const id = useTheme.getState().id;
-  return id ? THEMES[id].playlist : [];
+  const { id, mod } = useTheme.getState();
+  return mod ? mod.playlist : id ? THEMES[id].playlist : [];
 };
 
 /** The active theme's merge confetti, or undefined for the usual. */
-export const useThemeConfetti = () => useTheme((s) => (s.id ? THEMES[s.id].confetti : undefined));
+export const useThemeConfetti = () => useTheme((s) => (s.mod ? (s.mod.confetti ?? undefined) : s.id ? THEMES[s.id].confetti : undefined));
 
 // ---------- what the mounted chunk plugs in ----------
 
@@ -127,6 +134,10 @@ if (typeof window !== 'undefined' && !Object.getOwnPropertyDescriptor(window, '_
       },
       get source() {
         return useTheme.getState().source;
+      },
+      /** A mod's theme on instead (its key), or null. */
+      get mod() {
+        return useTheme.getState().mod?.key ?? null;
       },
       get day() {
         return useTheme.getState().day;

@@ -20,6 +20,7 @@ import { ProjectPicker } from './ProjectPicker';
 import { StatusPill } from './TerminalView';
 import { ThemeSettings } from './ThemeSettings';
 import { TimeLapseTab } from './TimeLapse';
+import { ModsTab } from './ModsTab';
 import { VoiceSettings } from './VoiceSettings';
 import { AccessibilitySettings } from './AccessibilitySettings';
 import { OutsideSettings } from './OutsideSettings';
@@ -738,6 +739,7 @@ export function ManagerConsole({ initialTab, initialRepo, card }: { initialTab?:
   const [tab, setTab] = useState<ManagerTab>(initialTab ?? 'floors');
   const pending = useStore((s) => pendingRequests(s.requests).length);
   const alarms = useStore((s) => s.ops.alarms.length);
+  const modErrors = useStore((s) => s.mods.mods.filter((m) => !m.ok).length);
   const tabs: [ManagerTab, string][] = [
     ['floors', '🏢 Floors & repos'],
     ['ops', `🛰️ Mission control${alarms ? ` (${alarms})` : ''}`],
@@ -745,6 +747,7 @@ export function ManagerConsole({ initialTab, initialRepo, card }: { initialTab?:
     ['team', '👩‍💻 Team'],
     ['issues', '📝 Issues'],
     ['settings', '⚙️ Settings'],
+    ['mods', `🧩 Mods${modErrors ? ` (${modErrors} ⚠)` : ''}`],
     ['timelapse', '📼 Time-lapse'],
     ['access', '♿ Accessibility'],
   ];
@@ -764,6 +767,7 @@ export function ManagerConsole({ initialTab, initialRepo, card }: { initialTab?:
         {tab === 'team' && <TeamTab />}
         {tab === 'issues' && <IssuesTab initialRepo={initialRepo} />}
         {tab === 'settings' && <SettingsTab />}
+        {tab === 'mods' && <ModsTab />}
         {tab === 'timelapse' && <TimeLapseTab />}
         {tab === 'access' && (
           <div className="tab-grid a11y-grid">
