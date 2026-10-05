@@ -11,6 +11,7 @@ import { confirmDialog, isConfirmOpen } from '../ui/Confirm';
 import { confirmResume } from '../ui/MissionConsole';
 import { photoActive, photoOwnsLock } from '../photo/gate';
 import { getAudioPrefs, toggleMute } from '../ui/sfx';
+import { getA11y } from '../ui/a11y';
 import { footstepsFollow } from '../ui/footsteps';
 import { dropHeld, startCharge, throwHeld, walk } from './toys/hands';
 import { watchLookLock } from './lookLock';
@@ -485,13 +486,15 @@ export function Player({ colliders, floor }: { colliders: Rect[]; floor: number 
       moving = true;
     }
     bob.current += moving ? dt * speed * tilt * 2.2 : 0;
+    // Head bob and the head tipping back for a sip can be turned off (Settings → Accessibility, motion comfort).
+    const comfort = getA11y();
     if (p) {
       camera.position.set(p.x, p.y, p.z);
       p.yaw = yaw;
       p.pitch = pitch;
-    } else camera.position.y = EYE_HEIGHT + (moving ? Math.sin(bob.current) * 0.035 : 0);
+    } else camera.position.y = EYE_HEIGHT + (moving && comfort.headBob ? Math.sin(bob.current) * 0.035 : 0);
     footstepsFollow(bob.current, moving, speed > 5, surfaceAt(floor === ROOF ? 'roof' : floor === 0 ? 'lobby' : 'office', camera.position.x, camera.position.z));
-    camera.rotation.set(pitch + (p?.tilt ?? 0) + sipPose.head, yaw, 0, 'YXZ');
+    camera.rotation.set(pitch + (p?.tilt ?? 0) + (comfort.cameraShake ? sipPose.head : 0), yaw, 0, 'YXZ');
     playerAt.x = camera.position.x;
     playerAt.z = camera.position.z;
     playerAt.yaw = yaw;
