@@ -20,6 +20,9 @@ import { Sky } from './sky/Sky';
 import { DayClock } from './sky/useDayTime';
 import { SoundListener } from './SoundListener';
 import { Soundscape } from './Soundscape';
+import { useTheme } from './themes/active';
+import { ThemeLayer } from './themes/ThemeLayer';
+import { decorColliders } from './themes/themes';
 import { TypingSounds } from './TypingSounds';
 import { Weather } from './weather/Weather';
 import { WorldEvents } from './events/WorldEvents';
@@ -56,9 +59,13 @@ export function Game() {
   const isOffice = !!repo;
   const top = useStore((s) => s.repos.reduce((m, r) => Math.max(m, r.floor), 0));
   const placed = useStore((s) => (repo ? s.progress.floors[repo.id]?.placed : undefined));
+  const theme = useTheme((s) => s.id);
   const colliders = useMemo(
-    () => (onRoof ? roofColliders() : isOffice ? [...officeColliders(), ...decorRects(placed ?? {})] : lobbyColliders()),
-    [onRoof, isOffice, placed],
+    () =>
+      onRoof
+        ? roofColliders()
+        : [...(isOffice ? [...officeColliders(), ...decorRects(placed ?? {})] : lobbyColliders()), ...decorColliders(theme, isOffice ? 'office' : 'lobby')],
+    [onRoof, isOffice, placed, theme],
   );
   const toRoof = useStore((s) => s.travel?.to === ROOF);
   useEffect(() => {
@@ -90,6 +97,7 @@ export function Game() {
       <WorldEvents kind={onRoof ? 'roof' : isOffice ? 'office' : 'lobby'} />
       <Suspense fallback={null}>{onRoof ? <Roof top={top} /> : repo ? <OfficeFloor key={repo.id} repo={repo} /> : <Lobby />}</Suspense>
       {!onRoof && <Outside key={isOffice ? floor : 0} kind={isOffice ? 'office' : 'lobby'} floor={isOffice ? floor : 0} top={top} />}
+      <ThemeLayer key={onRoof ? ROOF : isOffice ? floor : 0} kind={onRoof ? 'roof' : isOffice ? 'office' : 'lobby'} floor={onRoof ? ROOF : isOffice ? floor : 0} top={top} repoId={repo?.id ?? null} />
       <Player colliders={colliders} floor={floor} />
       <CameraRig />
       <Travel />
