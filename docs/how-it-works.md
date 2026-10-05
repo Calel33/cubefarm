@@ -99,6 +99,7 @@ Agents can do anything your own coding agent in a terminal can. Run the office w
 - `~/.cubefarm/leftovers/<owner>__<repo>/`: work saved from desks the office swept away
 - `~/.cubefarm/secrets.json`: the ElevenLabs key and the chat apps' webhooks; `~/.cubefarm/push.json`: the Web Push keys and your devices' subscriptions ([docs/pocket.md](pocket.md))
 - `~/.cubefarm/journal/<day>/`: the last week of the office's look, for the time-lapse (see below)
+- `~/.cubefarm/mods/<mod>/`: your mods, and `~/.cubefarm/mods.json` the ones switched off ([docs/mods.md](mods.md)). The office only reads data and pictures from them, never code
 
 Every 30 minutes (and when a floor starts, or someone is let go) the office sweeps each floor: it removes desks nobody uses any more and the finished `swarm/issue-*` and `qa/pr-*` branches nobody has checked out or has an open PR for. A desk with uncommitted changes to tracked files or unpushed commits is saved as a `.patch` in `leftovers/` first, and a folder that a program still has open is left for the next sweep. Your own branches and worktrees outside `desks/` are never touched.
 

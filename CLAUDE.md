@@ -104,6 +104,10 @@ Server (`server/`, Node + Express 5 + ws, run by tsx in development; esbuild bun
   apps' webhooks (secrets in `secrets.json`, push keys and devices in `push.json`), behind `Backend.notify`; `notify.ts`
   is its pure part (formatting, the per-event rate limit, webhook checks), `webPush.ts` VAPID and RFC 8291 encryption,
   `shared/notify.ts` the settings. `pwa.ts`: the installable app's service worker, served at `/sw.js`.
+- `mods.ts`: mods (docs/mods.md): scans `<SWARM_HOME>/mods`, checks each `mod.json` (zod) and every file it names (inside
+  its folder, no links out; size, type, picture dimensions, self-contained `.glb`), skips a bad mod whole, serves only
+  named files (`/api/mods/:mod/files/*`), keeps switched-off mods in `mods.json`; `examples/mods/hello-mod` is the
+  example. Views and keys (`mod:<mod>/<id>`) in `shared/mods.ts`.
 - `journal.ts`: the time-lapse journal (`<SWARM_HOME>/journal/<day>/`): records what `Swarm.broadcast` sends, a file
   per 10-minute keyframe, pruning, and the reads behind `/api/journal/*`. The rules (what's kept, secrets, seeking,
   marks) are in `shared/journal.ts`; `journalSample.ts` is the demo's made-up day.
@@ -161,6 +165,9 @@ Client (`client/`, Vite root; React 19, R3F, drei, zustand):
 - `src/world/batch.ts` / `Batched.tsx`: a floor's repeated parts (Toon.tsx's boxes, people's `Piece`s) drawn as
   instanced batches behind invisible stand-ins (`?batch=off` to compare). `src/world/paint/`: canvas textures
   recorded here and painted in an OffscreenCanvas worker, with the canvas path as fallback (`?paint=main`).
+- `src/mods/`: mods in the office: `placing.ts` (pure: named spots, fixed points, colliders), `ModLayer.tsx` (and
+  `__swarmMods`), the lazy `ModScene.tsx` (shapes, `.glb` models made toon, posters, a mod theme); `ui/ModsTab.tsx` is
+  the console's Mods page. Mod songs join `jukeboxSongs.ts` (`setModSongs`), mod themes `shared/themes.ts` resolveTheme.
 - `src/replay.ts`: the time-lapse: plays the journal through `store.apply(ev, 'play' | 'seek')` while live events
   wait; `replayClock.ts` is its pure clock and "since I was last here", `ui/TimeLapse.tsx` its console tab and bar.
 

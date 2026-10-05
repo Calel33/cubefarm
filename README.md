@@ -52,6 +52,7 @@ Demo mode fakes GitHub and the agents, so it costs nothing and changes nothing.
 - **Toys**: balls to throw, a basketball hoop (aim at the painted square and charge about halfway), foam blasters, a roomba, and coffee: take a mug from the dispenser, brew it at the machine and sip it with `E`.
 - **The office dog**: one dog for the whole building (Biscuit, renameable in Settings). Pet it with `E` and it follows you, throw a ball and it fetches it, and it naps, keeps struggling agents company, celebrates merges and rides the elevator between floors.
 - **Ping-pong**: `E` at either end of the table picks up a paddle and someone free comes to play you; the mouse moves the paddle and your swing sets the pace and spin. Games go to 11 and feed the floor's leaderboard on the wall.
+- **Mods**: your own posters, props and statues, jukebox songs and themes from a folder of pictures, models and a `mod.json` (no code), with a Mods page in the console. See [Mods](docs/mods.md).
 - **Sounds**: a master volume, `M` to mute, and a slider each for footsteps, typing, toys and alerts. Find them in help (`H`).
 
 ## Controls
@@ -113,6 +114,7 @@ Running it from a clone of this repo (`npm start`)? Then the office updates itse
 
 - [How it works](docs/how-it-works.md): the life of an issue, QA, auto-merge, models and usage, the safety model and floor previews
 - [The office in your pocket](docs/pocket.md): pocket mode on your phone, installing the app, notifications (desktop, push, Discord, Slack, Telegram, ntfy) and reaching the office safely from your phone
+- [Mods](docs/mods.md): add your own posters, props, jukebox songs and themes, with a 5-minute walkthrough
 - [Contributing](CONTRIBUTING.md): run it from source, tests, architecture and publishing
 
 ## License
