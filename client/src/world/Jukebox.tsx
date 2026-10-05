@@ -57,7 +57,11 @@ const modSongsOf = (mods: ModsView) => activeMods(mods).flatMap((m) => m.songs);
 const loadModSongs = (mods: ModsView) => setModSongs(modSongsOf(mods).map((s): Song => s.song));
 loadModSongs(useStore.getState().mods);
 useStore.subscribe((s, prev) => {
-  if (s.mods !== prev.mods) loadModSongs(s.mods);
+  if (s.mods === prev.mods) return;
+  loadModSongs(s.mods);
+  // a song whose mod was just switched off stops for the next one
+  const playing = nowPlaying()?.song.id;
+  if (playing?.startsWith('mod:') && !modSongsOf(s.mods).some((m) => m.key === playing)) start();
 });
 
 /** The theme's (or a mod's) song this floor plays now, or null (none, or the usual song's turn). */

@@ -31,7 +31,8 @@ function Gallery({ mod }: { mod: ModView }) {
           </span>
           <b>{p.name}</b>
           <span className="muted small">
-            {p.model ? '3D model' : `${p.shapes?.length ?? 0} shapes`} · {p.height} m{p.place.length ? '' : ' · for its theme'}
+            {p.model ? `3D model · ${p.height} m` : `${p.shapes?.length ?? 0} shapes`}
+            {p.place.length ? '' : ' · for its theme'}
           </span>
         </div>
       ))}

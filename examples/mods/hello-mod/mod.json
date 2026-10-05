@@ -2,7 +2,7 @@
   "name": "Hello mod",
   "version": "1.0.0",
   "author": "cubefarm",
-  "description": "The example mod: a poster over the lobby's waiting chairs, a mascot statue in the lobby, a jukebox song and a little theme. Copy it, change it, make it yours.",
+  "description": "The example mod: a poster by the lobby's coffee corner, a mascot statue in the lobby, a jukebox song and a little theme. Copy it, change it, make it yours.",
   "kinds": ["props", "posters", "songs", "themes"],
   "props": [
     {
@@ -33,7 +33,7 @@
       "name": "Hello poster",
       "image": "poster.png",
       "width": 1.0,
-      "place": [{ "floor": "lobby", "x": 15.97, "z": 7.55, "y": 2.3, "turn": -90 }]
+      "place": [{ "floor": "lobby", "x": 12.9, "z": 11.97, "y": 1.9, "turn": 180 }]
     }
   ],
   "songs": [

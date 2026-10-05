@@ -14,7 +14,7 @@ usual.
    mod (hello-mod) in**. It lands in your mods folder, shown on that page: `~/.cubefarm/mods/hello-mod` (or
    `<SWARM_HOME>/mods/hello-mod`). The office never opens folders for you; copy the path and open it yourself.
 2. **Look at it in the office.** Ride to the lobby: the mascot statue stands in the quiet corner south of the manager's
-   office, and the "Hello mod!" poster hangs over the waiting chairs by the east wall. On the jukebox, *Hello World Hop*
+   office, and the "Hello mod!" poster hangs on the south wall, east of the coffee corner. On the jukebox, *Hello World Hop*
    takes turns with the usual songs. On the Mods page, press **Turn it on** under *Mod week*: every desk gets a mini
    mascot, the walls get string lights, people put on party hats and the jukebox plays the mod's song first.
 3. **Make it yours.** Copy the `hello-mod` folder to a new name, say `acme`, and in `acme/mod.json` change the `name`.
@@ -98,13 +98,13 @@ between mods, the first by folder name gets it.
 **Fixed points** put an item at the same place on every office floor or in the lobby:
 
 ```json
-{ "floor": "lobby", "x": 15.97, "z": 7.55, "y": 2.3, "turn": -90 }
+{ "floor": "lobby", "x": 12.9, "z": 11.97, "y": 1.9, "turn": 180 }
 ```
 
 Every floor is 32 m wide and 24 m deep: `x` runs from -16 (west wall) to 16 (east wall), `z` from -12 (north wall) to 12
 (south wall, where the elevator is). `y` is the height: a prop's base (default 0, the floor) or a poster's middle
-(default 1.7). `turn` is in degrees: 0 faces south, 90 east, -90 west, 180 north. A poster on the east wall faces west
-(`-90`) at `x` 15.97.
+(default 1.7). `turn` is in degrees: 0 faces south, 90 east, -90 west, 180 north. A poster on the south wall faces north
+(`180`) at `z` 11.97; one on the east wall faces west (`-90`) at `x` 15.97.
 
 ## Props
 
