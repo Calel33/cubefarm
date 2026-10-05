@@ -10,6 +10,7 @@ import { saidHello } from './actions';
 import { inSecretRoom } from './room';
 import { playerAt } from '../camera/rig';
 import { CEO_ID } from '../../../../shared/types';
+import { warpPlayer } from '../Player';
 
 function snapshot() {
   const s = useSecrets.getState();
@@ -30,6 +31,8 @@ function snapshot() {
 }
 
 const api = {
+  /** Stands you at (x, z) on this floor, looking yawDeg (0 north, 90 west) and pitchDeg (up +): to see a duck, say. */
+  look: (x: number, z: number, yawDeg = 0, pitchDeg = 0) => warpPlayer(x, z, (yawDeg * Math.PI) / 180, (pitchDeg * Math.PI) / 180),
   /** Picks up a duck by id, as E on it would (wherever you are). */
   find: (id: string) => findDuck(id),
   /** Every duck at once. */

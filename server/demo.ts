@@ -40,6 +40,11 @@ const mergedSinceSync = new Map<string, number>(); // merges the fake project fo
 const closedIssues = new Set<string>(); // `${fullName}#${n}`: issues closed by a merge
 // Issues closed as not planned, newest first: every demo repo starts with one gravestone in the lobby.
 const notPlanned = new Map<string, RipIssue[]>();
+const DEMO_RIP: RipIssue[] = [
+  { number: 1, title: 'Rewrite everything in a weekend' },
+  { number: 2, title: 'Add a blockchain' },
+  { number: 3, title: 'Make the logo bigger (again)' },
+];
 
 const fakeSha = () => crypto.randomBytes(20).toString('hex');
 
@@ -658,7 +663,7 @@ export function createDemoBackend(scale: DemoScale | null = null): Backend {
         r.issues = r.issues.filter((i) => !pr.closesIssues.includes(i.number));
       }, 20_000).unref();
     },
-    listNotPlanned: async (fullName) => notPlanned.get(fullName) ?? [{ number: 1, title: 'Rewrite everything in a weekend' }],
+    listNotPlanned: async (fullName) => notPlanned.get(fullName) ?? [DEMO_RIP[fullName.length % DEMO_RIP.length]],
     closeIssue: async (fullName, number, _comment, reason) => {
       const r = repos.get(fullName);
       const closing = r?.issues.find((i) => i.number === number);

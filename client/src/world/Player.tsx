@@ -71,6 +71,12 @@ function lockPointer(el: HTMLCanvasElement, options?: PointerLockOptions): Promi
   }
 }
 
+/** A jump to (x, z) looking yaw/pitch (radians) on this floor, for QA probes (__swarmSecrets.look); applied next frame. */
+let warp: { x: number; z: number; yaw: number; pitch: number } | null = null;
+export function warpPlayer(x: number, z: number, yaw: number, pitch: number) {
+  warp = { x, z, yaw, pitch };
+}
+
 /** Spike counters, readable from the console as __swarmLook. */
 const lookDiag = { dropped: 0, skipped: 0 };
 (window as unknown as Record<string, unknown>).__swarmLook = lookDiag;
@@ -481,6 +487,11 @@ export function Player({ colliders, floor }: { colliders: Rect[]; floor: number 
       return;
     }
 
+    if (warp) {
+      camera.position.set(warp.x, EYE_HEIGHT, warp.z);
+      look.current = { yaw: warp.yaw, pitch: warp.pitch };
+      warp = null;
+    }
     // Perched, the eye stays put and the view starts the perch's way; got up, you stand at its exit. The stick gets you up too.
     const p = perch();
     if (p && (px || py)) leavePerch();
