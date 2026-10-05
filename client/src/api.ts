@@ -4,6 +4,7 @@ import type { AgentStyle } from '../../shared/looks';
 import type { AgentCli, AgentPromptView, GhRepoSummary, NotifyChannel, NotifyChannelsView, NotifyWebhook, OfficeUpdateView, PreviewView, ProjectFolderView, PrPreviewView, RepoView, SwarmSettings, UsageView, VoiceCacheView, VoiceOption } from '../../shared/types';
 import type { JournalChunk, JournalDayView } from '../../shared/journal';
 import type { DecorItem, ProgressView } from '../../shared/progress';
+import type { FloorLayout, FloorStyle } from '../../shared/floorLook';
 
 async function call<T = unknown>(method: string, url: string, body?: unknown, toast = true): Promise<T> {
   // The time-lapse shows a recorded day: nothing in it can be acted on.
@@ -63,6 +64,8 @@ export const api = {
       autoMerge?: boolean;
       browserTesting?: boolean;
       color?: string;
+      style?: FloorStyle;
+      layout?: FloorLayout;
       links?: string[];
       mission?: string;
       summary?: string;

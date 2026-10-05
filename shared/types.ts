@@ -4,6 +4,7 @@ import type { ProgressView, RewardView } from './progress.ts';
 
 import type { WeatherSettings, WeatherView, WorldEventSettings } from './outside.ts';
 import type { ThemeSettings } from './themes.ts';
+import type { FloorLayout, FloorStyle } from './floorLook.ts';
 import type { AgentStyle } from './looks.ts';
 
 export type AgentStatus =
@@ -65,6 +66,8 @@ export interface RepoView {
   defaultBranch: string;
   floor: number; // 1-based floor number in the building
   color: string; // accent color for the floor
+  style: FloorStyle; // the floor's interior style (shared/floorLook.ts)
+  layout: FloorLayout; // how its desks are laid out
   autoAssign: boolean;
   autoMerge: boolean; // PRs merge themselves once QA passes and GitHub's checks are green
   folderSync: string | null; // how the floor's main checkout stands against GitHub: "in sync", "updated to abc1234", "2 behind: local changes" …

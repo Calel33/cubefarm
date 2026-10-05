@@ -51,6 +51,8 @@ const floor = (id: string, n: number, issues: number): RepoView => ({
   defaultBranch: 'main',
   floor: n,
   color: '#ff0000',
+  style: 'classic',
+  layout: 'open',
   autoAssign: true,
   autoMerge: true,
   folderSync: null,

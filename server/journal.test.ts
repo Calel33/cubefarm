@@ -80,6 +80,8 @@ function repo(pulls: PullInfo[]): RepoView {
     defaultBranch: 'main',
     floor: 1,
     color: '#ff0000',
+    style: 'classic',
+    layout: 'open',
     autoAssign: true,
     autoMerge: true,
     folderSync: null,

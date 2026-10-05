@@ -191,6 +191,8 @@ export function compactRepo(r: RepoView, secrets: readonly string[] = []): RepoV
     defaultBranch: r.defaultBranch,
     floor: r.floor,
     color: r.color,
+    style: r.style,
+    layout: r.layout,
     autoAssign: r.autoAssign,
     autoMerge: r.autoMerge,
     folderSync: null,

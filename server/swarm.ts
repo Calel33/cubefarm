@@ -33,6 +33,7 @@ import { clampPacingSessions, DEFAULT_PACING_SESSIONS, mayStart, PACING_MS, paci
 import { emptyHistory, loadHistory, opsView, recordChecks, recordCost, recordMerges, recordQa, type OpsFloorState, type OpsHistory } from './metrics.ts';
 import { clampTrimIdleMin, DEFAULT_TRIM_IDLE_MIN, desksToTrim, formatBytes, freedMessage, idleSince, TRIM_SWEEP_MS } from './deskTrim.ts';
 import { isCli } from './clis.ts';
+import { cleanFloorLook, DEFAULT_FLOOR_LAYOUT, DEFAULT_FLOOR_STYLE, FLOOR_LAYOUTS, FLOOR_STYLES, isFloorLayout, isFloorStyle, type FloorLayout, type FloorStyle } from '../shared/floorLook.ts';
 import { envSecrets, Journal } from './journal.ts';
 import { sampleDay, seeded } from './journalSample.ts';
 import { addTenure, apply as applyLedger, buy as buyDecor, emptyLedger, grant as grantCoins, loadLedger, place as placeDecor, progressView, type CommandResult, type Effects, type LedgerEvent, type LedgerState } from './ledger.ts';
@@ -99,6 +100,8 @@ interface PersistedRepo {
   defaultBranch: string;
   floor: number;
   color: string;
+  style: FloorStyle;
+  layout: FloorLayout;
   autoAssign: boolean;
   autoMerge: boolean; // PRs merge themselves once QA passes and GitHub's checks are green
   browserTesting: boolean;
@@ -603,6 +606,7 @@ export class Swarm {
         settings: { ...this.state.settings, ...loaded.settings },
         repos: (loaded.repos ?? []).map((r) => ({
           ...r,
+          ...cleanFloorLook(r),
           autoMerge: r.autoMerge ?? true,
           links: r.links ?? [],
           mission: r.mission ?? '',
@@ -850,6 +854,8 @@ export class Swarm {
       defaultBranch: r.defaultBranch,
       floor: r.floor,
       color: r.color,
+      style: r.style,
+      layout: r.layout,
       autoAssign: r.autoAssign,
       autoMerge: r.autoMerge,
       folderSync: rt.folderSync,
@@ -1176,6 +1182,8 @@ export class Swarm {
       defaultBranch: meta.defaultBranch,
       floor,
       color: FLOOR_COLORS[(floor - 1) % FLOOR_COLORS.length],
+      style: DEFAULT_FLOOR_STYLE,
+      layout: DEFAULT_FLOOR_LAYOUT,
       autoAssign: !!opts.autoAssign,
       autoMerge: true,
       browserTesting: true,
@@ -1284,9 +1292,11 @@ export class Swarm {
 
   updateRepo(
     id: string,
-    patch: Partial<Pick<PersistedRepo, 'autoAssign' | 'autoMerge' | 'browserTesting' | 'color' | 'links' | 'mission' | 'summary' | 'qaBrief'>> & { previewCommand?: unknown; previewEnv?: unknown },
+    patch: Partial<Pick<PersistedRepo, 'autoAssign' | 'autoMerge' | 'browserTesting' | 'color' | 'links' | 'mission' | 'summary' | 'qaBrief'>> & { previewCommand?: unknown; previewEnv?: unknown; style?: unknown; layout?: unknown },
   ) {
     const repo = this.repo(id);
+    if (patch.style !== undefined && !isFloorStyle(patch.style)) throw new HttpError(400, `Unknown style: pick one of ${FLOOR_STYLES.join(', ')}`);
+    if (patch.layout !== undefined && !isFloorLayout(patch.layout)) throw new HttpError(400, `Unknown layout: pick one of ${FLOOR_LAYOUTS.join(', ')}`);
     const preview = parsePreviewPatch(patch.previewCommand, patch.previewEnv);
     repo.preview = { ...repo.preview, ...preview };
     if (preview.command === null) void this.previews.refreshDefault(repo);
@@ -1297,6 +1307,8 @@ export class Swarm {
     }
     if (patch.browserTesting !== undefined) repo.browserTesting = !!patch.browserTesting;
     if (patch.color && /^#[0-9a-f]{6}$/i.test(patch.color)) repo.color = patch.color;
+    if (isFloorStyle(patch.style)) repo.style = patch.style;
+    if (isFloorLayout(patch.layout)) repo.layout = patch.layout;
     if (Array.isArray(patch.links)) repo.links = patch.links.filter((l) => l !== id && this.state.repos.some((r) => r.id === l));
     if (typeof patch.mission === 'string') repo.mission = patch.mission.trim().slice(0, 4000);
     if (typeof patch.summary === 'string') repo.summary = patch.summary.trim().slice(0, 140);

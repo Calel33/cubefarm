@@ -59,6 +59,8 @@ function repo(patch: Partial<RepoView> = {}): RepoView {
     defaultBranch: 'main',
     floor: 1,
     color: '#ff0000',
+    style: 'classic',
+    layout: 'open',
     autoAssign: true,
     autoMerge: true,
     folderSync: 'in sync',
