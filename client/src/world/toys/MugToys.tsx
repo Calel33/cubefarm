@@ -17,7 +17,7 @@ import { useInteractable } from '../interact';
 import { FIRST_PERSON } from '../viewTags';
 import { escaped } from './balls';
 import { walk } from './hands';
-import { MUG_SIZE, MugLook, Steam, mugColor } from './mugLook';
+import { MUG_SIZE, MugLook, Steam, mugColor, mugDrink } from './mugLook';
 import { mugsToEvict, resetMugs, setMugSource, takeDrop, type HeldMug } from './mugs';
 import { clunkPeak, impactSpeed } from './sip';
 import { clunk, sipPose } from './sipping';
@@ -72,7 +72,7 @@ function ViewModel({ mug }: { mug: HeldMug }) {
   return (
     <group ref={root} userData={FIRST_PERSON}>
       <group ref={cup} rotation={[VIEW.tilt, VIEW.turn, 0]} scale={VIEW.scale}>
-        <MugLook color={mugColor(mug.id)} sips={mug.sips} shadow={false} steam={false} />
+        <MugLook color={mugColor(mug.id)} drink={mugDrink(mug.id)} sips={mug.sips} shadow={false} steam={false} />
       </group>
       {mug.sips > 0 && (
         <group ref={steam} position={[VIEW.x, VIEW.y + MUG_SIZE.h * VIEW.scale * 0.45, VIEW.z - 0.02]} scale={VIEW.scale}>
@@ -148,7 +148,7 @@ function LooseMug({ mug, groups, bodies, onLost }: { mug: Loose; groups: number;
       <CylinderCollider ref={cup} args={[h / 2, (r + rBase) / 2]} density={300} friction={0.7} restitution={0.2} collisionGroups={groups} />
       <CuboidCollider ref={handle} args={HANDLE.half} position={HANDLE.at} density={300} friction={0.7} restitution={0.2} collisionGroups={groups} />
       <group ref={ref}>
-        <MugLook color={mugColor(mug.id)} sips={mug.sips} />
+        <MugLook color={mugColor(mug.id)} drink={mugDrink(mug.id)} sips={mug.sips} />
         {/* an invisible, roomier target, so a small mug on the floor is easy to aim at */}
         <mesh visible={false}>
           <boxGeometry args={[0.26, 0.26, 0.26]} />

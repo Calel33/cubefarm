@@ -84,6 +84,17 @@ describe('visiting a busy teammate', () => {
     expect(busyNeighbour(me, [me])).toBeNull();
   });
 
+  it('looks in on a busy friend first, from further away', () => {
+    const me = peer('me', 'idle', 'desk-0');
+    const others = [me, peer('busy', 'working', 'desk-1'), peer('pal', 'working', 'desk-2')];
+    expect(busyNeighbour(me, others, ['pal'])!.id).toBe('pal');
+    // too far to look in on a teammate, near enough for a friend
+    const far = peer('far', 'working', 'desk-2');
+    expect(busyNeighbour(me, [me, far])).toBeNull();
+    expect(busyNeighbour(me, [me, far], ['far'])!.id).toBe('far');
+    expect(busyNeighbour(me, [me, peer('pal', 'idle', 'desk-2'), peer('busy', 'working', 'desk-1')], ['pal'])!.id).toBe('busy');
+  });
+
   it("stands behind every desk's chair, and can walk there from every other desk", () => {
     const desks = office.homes.filter((h) => h.id.startsWith('desk-'));
     for (const d of desks) {
@@ -138,6 +149,14 @@ describe('chats', () => {
     expect(plan.ids).toEqual(['a', 'b', 'c']);
     expect(plan.venue).toBe('cooler');
     expect(planChat(people, { ...opts, rand: seq(0, 0, 0.1, 0.9) })!.ids).toEqual(['a', 'b']);
+  });
+
+  it('starts with an extrovert more often, and friends seek each other out', () => {
+    const people = [{ ...cand('shy', 0, 40), weight: 0.3 }, { ...cand('loud', 5, 40), weight: 1.8 }, cand('b', 6, 20), cand('pal', 12, 20)];
+    // the starter is drawn by weight: 0.3 of the 4.1 total belongs to 'shy'
+    expect(planChat(people, { ...opts, rand: seq(0, 0.5, 0.1, 0) })!.ids[0]).toBe('loud');
+    const pull = (a: string, b: string) => (a === 'loud' && b === 'pal' ? 8 : 0);
+    expect(planChat(people, { ...opts, pull, rand: seq(0, 0.5, 0.1, 0) })!.ids).toEqual(['loud', 'pal']);
   });
 
   it('not too often, not without room under the walker cap, and never alone', () => {

@@ -4,6 +4,7 @@
 // the evening, sends idle people home and brings them back in the morning with a coffee. In the lobby it only sees
 // the CEO off on their walks. Everything it moved is put back when the floor goes.
 
+import { traitsOf } from '../../../shared/personality';
 import { CEO_ID, type AgentStatus, type RepoView } from '../../../shared/types';
 import { dayPart, standupLine } from '../../../shared/speech';
 import { kanbanFor, useStore, type Agent } from '../store';
@@ -15,7 +16,7 @@ import { closeGathering, openGathering, type Gathering } from './gathering';
 import { GONG_SPOT, HALF_D } from './layout';
 import { shade } from './materials';
 import { meals, mealsChanged, resetMeals } from './meals';
-import { bodyState, isSeated, placeBody, say, seatBody, setBody, setDeskMug, setHandMug, setHidden } from './people';
+import { bodyState, isSeated, placeBody, say, saying, seatBody, setBody, setDeskMug, setHandMug, setHidden } from './people';
 import { queueFidget } from './reactionFeed';
 import { resetRitualLook, ritualLook } from './ritualLook';
 import {
@@ -45,7 +46,8 @@ import { CABIN, DOORS_SECONDS, shoulderSpot } from './socials';
 import { Performer, type Cue } from './stage';
 import { holdBackCards, presentSticky, showCards } from './StickyNotes';
 import { roombaRound } from './toys/npc';
-import { tintMug } from './toys/mugLook';
+import { setMugDrink, tintMug } from './toys/mugLook';
+import { byArrival, stillHere } from './social';
 import { spot, walkways, type Walkways } from './walkways';
 
 /** The pizza courier's id, as people.ts knows them while they're on the floor. */
@@ -287,7 +289,7 @@ export class OfficeRitualRunner {
     });
     shared.walkAt = this.s.walkAt;
     for (const d of decisions) this.apply(d, now);
-    this.upkeep(now);
+    this.upkeep(now, clock.hour);
   }
 
   /** Arriving on the floor in the evening: it's already as the evening left it, nobody walks anywhere. */
@@ -557,8 +559,9 @@ export class OfficeRitualRunner {
    * Every look: anyone home who has work now comes straight in, and by day the rest come in one by one with a coffee;
    * at home time the idle ones pack up and go, a few at a time.
    */
-  private upkeep(now: number) {
-    for (const id of [...this.home]) {
+  private upkeep(now: number, hour: number) {
+    // early birds come in first (traitWeights.ts)
+    for (const id of byArrival([...this.home])) {
       const a = this.agents.find((x) => x.id === id);
       if (!a) this.unpark(id);
       else if (!isFree(a.status) && !this.moving.has(id)) this.comeIn(a, false);
@@ -583,6 +586,11 @@ export class OfficeRitualRunner {
     // home time: everyone idle at their desk packs up (the errand director lets them be), then they go, a few at a time
     for (const a of this.agents) {
       if (!isFree(a.status) || !isSeated(a.id) || this.home.has(a.id) || this.moving.has(a.id)) continue;
+      // a night owl stays on a while with their music before packing up
+      if (stillHere(a.id, hour)) {
+        if (!this.packing.has(a.id) && !saying(a.id) && Math.random() < 0.01) say(a.id, '🎧 ♪ ♫', 3);
+        continue;
+      }
       setBody(a.id, { mode: 'seated' });
       this.packing.add(a.id);
     }
@@ -622,6 +630,7 @@ export class OfficeRitualRunner {
     if (!home) return this.unpark(a.id);
     const mug = coffee ? { id: `mug-${a.id}-${++this.mugs}`, sips: 3 } : null;
     if (mug) tintMug(mug.id, shade(a.color, 0.1));
+    if (mug) setMugDrink(mug.id, traitsOf(a).drink); // in with their own drink: tea, coffee or an energy drink
     const gesture: Gesture = mug ? 'mug' : 'none';
     const speed = coffee ? undefined : HURRY;
     const p = new Performer(a.id, this.w, [

@@ -6,6 +6,7 @@ import { useStore } from '../store';
 import type { DeskLife, Fidget } from './fidgets';
 import { liveBodies } from './people';
 import { mergedBy, neighboursOf, newlyErrored, newlyMerged, newlyPassed } from './reactions';
+import { friendMerged } from './social';
 
 export interface Queued {
   fidget: Fidget;
@@ -71,6 +72,7 @@ useStore.subscribe((state, prev) => {
     for (const pr of merged) {
       const dev = mergedBy(pr, devOf.get(`${pr.repoId}#${pr.number}`), agents);
       if (dev) merges.set(dev, Date.now());
+      if (dev) friendMerged(dev); // friends cheer louder and come over for a high five
       const seat = dev ? seats.get(dev) : undefined;
       if (!dev || !seat) continue;
       for (const n of neighboursOf(dev, seats)) queueFidget(n, 'wave', seat.seatX, seat.seatZ);

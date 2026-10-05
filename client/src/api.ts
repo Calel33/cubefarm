@@ -1,6 +1,7 @@
 import { useStore } from './store';
 import type { PongResult } from '../../shared/pong';
 import type { AgentStyle } from '../../shared/looks';
+import type { Traits } from '../../shared/personality';
 import type { AgentCli, AgentPromptView, GhRepoSummary, NotifyChannel, NotifyChannelsView, NotifyWebhook, OfficeUpdateView, PreviewView, ProjectFolderView, PrPreviewView, RepoView, SwarmSettings, UsageView, VoiceCacheView, VoiceOption } from '../../shared/types';
 import type { JournalChunk, JournalDayView } from '../../shared/journal';
 import type { DecorItem, ProgressView } from '../../shared/progress';
@@ -92,7 +93,7 @@ export const api = {
   sendBack: (repoId: string, n: number, note?: string) => call('POST', `${r(repoId)}/pulls/${n}/fix`, { note }),
   hireAgent: (repoId: string, opts: { name?: string; model?: string; effort?: string; role?: 'dev' | 'qa'; title?: string; specialty?: string } = {}) =>
     call('POST', `${r(repoId)}/agents`, opts),
-  updateAgent: (id: string, patch: { name?: string; model?: string; effort?: string; cli?: AgentCli | ''; look?: 'feminine' | 'masculine'; title?: string; specialty?: string; brief?: string; style?: AgentStyle | null }) =>
+  updateAgent: (id: string, patch: { name?: string; model?: string; effort?: string; cli?: AgentCli | ''; look?: 'feminine' | 'masculine'; title?: string; specialty?: string; brief?: string; style?: AgentStyle | null; traits?: Partial<Traits> | null }) =>
     call('PATCH', `/api/agents/${id}`, patch),
   fireAgent: (id: string) => call('DELETE', `/api/agents/${id}`),
   /** waitForDeps: refuse an issue that still waits for open ones, as the whiteboard's stickies do. */
@@ -116,6 +117,8 @@ export const api = {
   phoneRead: (at: number) => call('POST', '/api/phone/read', { at }),
   /** A finished ping-pong game on a floor, for its leaderboard (shared/pong.ts parsePongResult). */
   pongResult: (repoId: string, result: PongResult) => call('POST', `${r(repoId)}/pong`, result),
+  /** A chat at the cooler or the couch, for the floor's relationships (shared/relations.ts). */
+  chatted: (repoId: string, ids: string[], venue: string) => call('POST', `${r(repoId)}/chats`, { ids, venue }, false),
   approveRequest: (id: string, overrides: { name?: string; model?: string; effort?: string; note?: string } = {}) => call('POST', `/api/requests/${id}/approve`, overrides),
   rejectRequest: (id: string, note?: string) => call('POST', `/api/requests/${id}/reject`, { note }),
   /** Demo office only: the CEO proposes a hire (or letting someone go) on demand. */

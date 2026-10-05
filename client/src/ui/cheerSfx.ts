@@ -149,10 +149,10 @@ function word(c: Channels, dest: AudioNode, t0: number, v: CheerVoice, w: CheerW
   return t1;
 }
 
-/** An agent's cheer at `t0`: their word, then maybe a second, smaller "woo" or three claps. */
-function cheer(c: Channels, dest: AudioNode, t0: number, v: CheerVoice) {
-  const end = word(c, dest, t0, v, v.word, VOICE_PEAK);
-  if (v.extra === 'woo') word(c, dest, end + 0.08 + Math.random() * 0.1, v, 'woo', VOICE_PEAK * 0.55, 1.12, 0.8);
+/** An agent's cheer at `t0`: their word, then maybe a second, smaller "woo" or three claps. `loud`: a friend's merge (#267). */
+function cheer(c: Channels, dest: AudioNode, t0: number, v: CheerVoice, loud = 1) {
+  const end = word(c, dest, t0, v, v.word, VOICE_PEAK * loud);
+  if (v.extra === 'woo' || loud > 1) word(c, dest, end + 0.08 + Math.random() * 0.1, v, 'woo', VOICE_PEAK * 0.55 * loud, 1.12, 0.8);
   else if (v.extra === 'clap')
     for (let i = 0; i < 3; i++) puff(c, dest, end + 0.05 + i * 0.14 + Math.random() * 0.03, 0.045, VOICE_PEAK * 0.6, 1200 + Math.random() * 400, 1.3);
 }
@@ -201,22 +201,25 @@ function crowd(c: Channels, dest: AudioNode, t0: number, peak: number) {
 interface Cheerer extends Vec3 {
   voice: CheerVoice | null;
   d: number;
+  loud: number;
 }
 
 const MAX_CHEERERS = 64;
-const pool: Cheerer[] = Array.from({ length: MAX_CHEERERS }, () => ({ voice: null, x: 0, y: 0, z: 0, d: 0 }));
+const pool: Cheerer[] = Array.from({ length: MAX_CHEERERS }, () => ({ voice: null, x: 0, y: 0, z: 0, d: 0, loud: 1 }));
 const waiting: Cheerer[] = [];
 let queued = false;
 let lastCheer = -Infinity;
 
 /**
- * Character.tsx calls this in the frame someone's arms go up for a merge, with their voice and where their head is.
+ * Character.tsx calls this in the frame someone's arms go up for a merge, with their voice, where their head is and how
+ * loud (a friend of the author's cheers louder).
  * Everyone who cheers in the same frame is one cheer, sung once the frame is done. Allocates nothing.
  */
-export function cheerFrom(voice: CheerVoice, x: number, y: number, z: number) {
+export function cheerFrom(voice: CheerVoice, x: number, y: number, z: number, loud = 1) {
   if (waiting.length >= MAX_CHEERERS) return;
   const c = pool[waiting.length];
   c.voice = voice;
+  c.loud = loud;
   c.x = x;
   c.y = y;
   c.z = z;
@@ -256,10 +259,10 @@ function play() {
     const pos = { x: who.x, y: who.y, z: who.z };
     const p = c?.voices[k];
     if (p) setPannerPosition(p, pos.x, pos.y, pos.z);
-    const rec = recordSfx(`cheer:${who.voice!.word}`, { group: 'typing', pos, peak: VOICE_PEAK, played: !!p });
+    const rec = recordSfx(`cheer:${who.voice!.word}`, { group: 'typing', pos, peak: VOICE_PEAK * who.loud, played: !!p });
     rec.from = p ? pannerAt(p) : null;
     const dest = through(c, p, pos, rec);
-    if (c && dest) cheer(c, dest, t0 + stagger(Math.random()), who.voice!);
+    if (c && dest) cheer(c, dest, t0 + stagger(Math.random()), who.voice!, who.loud);
   });
   if (!plan.crowd.length) return;
   const mid = { x: 0, y: 0, z: 0 };

@@ -2,6 +2,8 @@
 // what they're known for), the card that pops up when you look at a desk for a moment, and the Team tab's table.
 import { useEffect, useRef, useState } from 'react';
 import { avgFixRounds, knownFor, mergesThisWeek, passRate, rank, stickerFor, tenureDays, topSpecialty, type CareerView } from '../../../shared/careers';
+import { traitsOf, traitWords } from '../../../shared/personality';
+import { friendsOf, rivalsOf } from '../../../shared/relations';
 import { useStore, type Agent } from '../store';
 import { drawPortrait } from './portrait';
 
@@ -47,8 +49,33 @@ function Stat({ label, value, title }: { label: string; value: string | number; 
   );
 }
 
+/** Their best friends and rival on the floor (#267), with little portraits; nothing until they have any. */
+function Bonds({ agent, compact }: { agent: Agent; compact: boolean }) {
+  const social = useStore((s) => s.social[agent.repoId]);
+  const agents = useStore((s) => s.agents);
+  const now = Date.now();
+  const friends = friendsOf(social, agent.id, now, 2).map((id) => agents[id]).filter(Boolean);
+  const rival = rivalsOf(social, agent.id, now, 1).map((id) => agents[id]).filter(Boolean);
+  if (!friends.length && !rival.length) return compact ? null : <div className="muted small">No close friends or rivals yet: they grow from work done together, chats and ping-pong.</div>;
+  return (
+    <div className="career-bonds">
+      {friends.map((f) => (
+        <span key={f.id} className="career-bond" style={{ ['--bond' as string]: '#2f9e44' }} title={`${f.name} is one of ${agent.name}'s best friends`}>
+          <Portrait agent={f} size={26} /> 💚 {f.name}
+        </span>
+      ))}
+      {rival.map((r) => (
+        <span key={r.id} className="career-bond" style={{ ['--bond' as string]: '#f08c00' }} title={`${r.name} is ${agent.name}'s friendly rival`}>
+          <Portrait agent={r} size={26} /> 🔥 {r.name}
+        </span>
+      ))}
+    </div>
+  );
+}
+
 export function CareerCard({ agent, compact = false }: { agent: Agent; compact?: boolean }) {
   const repo = useStore((s) => s.repos.find((r) => r.id === agent.repoId));
+  const traits = traitsOf(agent);
   const now = Date.now();
   const c = agent.career;
   if (!c) return <div className="career-card muted small">{agent.name} runs the company; their record is the whole office.</div>;
@@ -73,8 +100,17 @@ export function CareerCard({ agent, compact = false }: { agent: Agent; compact?:
             {c.firstPass >= 10 && <span className="career-badge career-star">⭐ 10 first-time passes</span>}
           </div>
           <div className="career-known">“{knownFor(c, agent.role)}”</div>
+          <div className="career-traits" aria-label="Personality">
+            {traitWords(traits).map((w) => (
+              <span key={w} className="career-trait">
+                {w}
+              </span>
+            ))}
+            {traits.catchphrase && !compact && <span className="career-trait">💬 “{traits.catchphrase}”</span>}
+          </div>
         </div>
       </div>
+      <Bonds agent={agent} compact={compact} />
       <div className="career-stats">
         <Stat label="PRs merged" value={c.merged} />
         <Stat label="PRs opened" value={c.opened} />

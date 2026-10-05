@@ -5,13 +5,15 @@ import * as THREE from 'three';
 import { useInteractable } from '../interact';
 import { shade, toon } from '../materials';
 import { Box, Cyl } from '../Toon';
+import type { Drink } from '../../../../shared/personality';
 import { DISPENSER_ID, fillLevel, steamStrength } from './mugs';
 
 // What a coffee mug looks like, its steam, and the kitchenette's mug dispenser. No physics here, so the
 // kitchenette (Props.tsx) can draw the dispenser without loading the toy chunk.
 
 const INK = '#1f1d2b';
-const COFFEE = '#6f4518';
+/** What's in the mug: coffee, tea (with a teabag's string and tag over the rim) or a bright energy drink. */
+const LIQUID: Record<Drink, string> = { coffee: '#6f4518', tea: '#b8742a', energy: '#9be15d' };
 
 /** A mug's size in metres: radius at the rim and at the base, and height. */
 export const MUG_SIZE = { r: 0.055, rBase: 0.05, h: 0.12 };
@@ -22,6 +24,12 @@ const tints = new Map<string, string>();
 
 /** Gives a mug its own colour (an agent's coffee is in their colour), wherever it goes after. */
 export const tintMug = (id: string, color: string) => void tints.set(id, color);
+
+const drinks = new Map<string, Drink>();
+
+/** What a mug holds (an agent's own drink, shared/personality.ts); coffee unless set. */
+export const setMugDrink = (id: string, drink: Drink) => void drinks.set(id, drink);
+export const mugDrink = (id: string): Drink => drinks.get(id) ?? 'coffee';
 
 /** A mug's colour, picked from its id so the same mug keeps its colour when picked up and dropped again. */
 export function mugColor(id: string) {
@@ -48,7 +56,7 @@ function wall(color: string) {
  * A mug, centred on its middle with the handle towards +X, and coffee standing `sips` high inside.
  * `steam` adds a few wisps over a mug that has coffee in it.
  */
-export function MugLook({ color, sips, shadow = true, steam = sips > 0 }: { color: string; sips: number; shadow?: boolean; steam?: boolean }) {
+export function MugLook({ color, sips, shadow = true, steam = sips > 0, drink = 'coffee' }: { color: string; sips: number; shadow?: boolean; steam?: boolean; drink?: Drink }) {
   const { r, rBase, h } = MUG_SIZE;
   const level = fillLevel(sips);
   const bottom = -h / 2 + 0.008;
@@ -67,15 +75,31 @@ export function MugLook({ color, sips, shadow = true, steam = sips > 0 }: { colo
         <circleGeometry args={[rBase, 20]} />
       </mesh>
       {level > 0 && (
-        <mesh position={[0, coffeeY, 0]} rotation={[-Math.PI / 2, 0, 0]} material={toon(COFFEE)}>
+        <mesh position={[0, coffeeY, 0]} rotation={[-Math.PI / 2, 0, 0]} material={toon(LIQUID[drink])}>
           <circleGeometry args={[coffeeR, 20]} />
         </mesh>
       )}
+      {drink === 'tea' && <TeabagTag h={h} r={r} />}
       <mesh position={[r - 0.003, 0.004, 0]} rotation={[0, 0, -Math.PI / 2]} castShadow={shadow} material={toon(color)}>
         <torusGeometry args={[0.032, 0.01, 6, 14, Math.PI]} />
         <Outlines thickness={0.006} color={INK} />
       </mesh>
       {steam && level > 0 && <Steam y={h / 2} sips={sips} />}
+    </group>
+  );
+}
+
+/** A teabag's string over the rim (opposite the handle) and its little tag hanging down outside. */
+function TeabagTag({ h, r }: { h: number; r: number }) {
+  return (
+    <group position={[-r, h / 2, 0]}>
+      <mesh position={[-0.004, -0.025, 0]} material={toon('#f1f3f5')}>
+        <cylinderGeometry args={[0.0015, 0.0015, 0.05, 4]} />
+      </mesh>
+      <mesh position={[-0.006, -0.058, 0]} rotation={[0, Math.PI / 2, 0]} material={toon('#ffd166')}>
+        <boxGeometry args={[0.026, 0.022, 0.003]} />
+        <Outlines thickness={0.003} color={INK} />
+      </mesh>
     </group>
   );
 }

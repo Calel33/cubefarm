@@ -36,8 +36,30 @@ export const plantSpot = (role: string): Spot => (role === 'qa' ? { x: -0.72, y:
 export const photoSpot = (): Spot => ({ x: -0.42, y: TOP, z: -0.12, rotY: 0.25 });
 export const toySpot = (): Spot => ({ x: 0.5, y: TOP, z: -0.08, rotY: -0.5 });
 
-/** Everything one desk shows, as spots: what DeskStory.tsx instances. */
-export function deskLayout(items: DeskItems, role: string) {
+/** Where clutter goes (#267): stacks of paper, a snack or two and a can, clear of the rest, in the order it piles up. */
+export const PAPER_SPOTS: readonly Spot[] = [
+  { x: 0.78, y: TOP, z: 0.3, rotY: 0.2 },
+  { x: -0.8, y: TOP, z: 0.28, rotY: -0.25 },
+  { x: 0.28, y: TOP, z: -0.16, rotY: 1.4 },
+];
+export const SNACK_SPOTS: readonly Spot[] = [
+  { x: -0.22, y: TOP, z: -0.12, rotY: 0.6 },
+  { x: -0.42, y: TOP, z: 0.4, rotY: -0.4 },
+];
+export const CAN_SPOT: Spot = { x: 0.9, y: TOP, z: 0.12 };
+
+/** How cluttered a desk is by its owner's tidiness (0 spotless … 4 cluttered): nothing extra on a tidy one. */
+export function clutter(tidiness: number) {
+  const n = Math.max(0, Math.min(4, Math.round(tidiness)));
+  return {
+    papers: PAPER_SPOTS.slice(0, [0, 0, 1, 2, 3][n]),
+    snacks: SNACK_SPOTS.slice(0, [0, 0, 0, 1, 2][n]),
+    can: n >= 4 ? CAN_SPOT : null,
+  };
+}
+
+/** Everything one desk shows, as spots: what DeskStory.tsx instances. `tidiness`: their trait, for the clutter. */
+export function deskLayout(items: DeskItems, role: string, tidiness = 0) {
   return {
     shelf: items.plaques.length > 0,
     plaques: items.plaques.map((n, i) => ({ n, at: plaqueSpot(i) })),
@@ -47,5 +69,6 @@ export function deskLayout(items: DeskItems, role: string) {
     plant: { at: plantSpot(role), grow: items.plant },
     photo: items.photo ? photoSpot() : null,
     toy: items.toy ? { kind: items.toy as DeskToy, at: toySpot() } : null,
+    clutter: clutter(tidiness),
   };
 }

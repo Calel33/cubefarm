@@ -20,6 +20,7 @@ import { ProjectPicker } from './ProjectPicker';
 import { StatusPill } from './TerminalView';
 import { ThemeSettings } from './ThemeSettings';
 import { TimeLapseTab } from './TimeLapse';
+import { ChemistryTab } from './Chemistry';
 import { VoiceSettings } from './VoiceSettings';
 import { AccessibilitySettings } from './AccessibilitySettings';
 import { OutsideSettings } from './OutsideSettings';
@@ -743,6 +744,7 @@ export function ManagerConsole({ initialTab, initialRepo, card }: { initialTab?:
     ['ops', `🛰️ Mission control${alarms ? ` (${alarms})` : ''}`],
     ['ceo', `🧠 CEO & hiring${pending ? ` (${pending})` : ''}`],
     ['team', '👩‍💻 Team'],
+    ['chemistry', '💞 Team chemistry'],
     ['issues', '📝 Issues'],
     ['settings', '⚙️ Settings'],
     ['timelapse', '📼 Time-lapse'],
@@ -762,6 +764,7 @@ export function ManagerConsole({ initialTab, initialRepo, card }: { initialTab?:
         {tab === 'ops' && <OpsTab card={card} />}
         {tab === 'ceo' && <CeoTab />}
         {tab === 'team' && <TeamTab />}
+        {tab === 'chemistry' && <ChemistryTab />}
         {tab === 'issues' && <IssuesTab initialRepo={initialRepo} />}
         {tab === 'settings' && <SettingsTab />}
         {tab === 'timelapse' && <TimeLapseTab />}

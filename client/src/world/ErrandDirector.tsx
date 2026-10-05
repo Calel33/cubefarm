@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import type { AgentStatus } from '../../../shared/types';
 import { useRenderPaused } from '../perf';
+import { api } from '../api';
 import { useStore, type Agent } from '../store';
 import type { ChatTopic } from '../ui/chatterLines';
 import { ding } from '../ui/sfx';
@@ -9,6 +10,7 @@ import { WALK_SPEED, type Gesture } from './body';
 import { chatSay } from './Chatter';
 import { playerAt } from './camera/rig';
 import './coffeeErrand';
+import './friendErrands';
 import {
   HURRY_SPEED,
   admit,
@@ -44,10 +46,12 @@ import { HALF_D } from './layout';
 import { bodyState, bodyTarget, isSeated, onClaim, placeBody, say, seatBody, setBody, setErrand, takeAsk, trackDirector } from './people';
 import { queueFidget } from './reactionFeed';
 import { ARRIVE, CABIN, CHAT, CHAT_VENUES, DOORS_SECONDS, LEAVE, arrivalPath, exitPath, floorNews, headingTo, huddle, nearest, pickTopic, planChat, topicPr } from './socials';
+import { friendsNow, noteSocial, officeHour, rivalFree, rivalsNow, traitsFor } from './social';
+import { chatStarterWeight, errandWeight, FRIEND_PULL, hobbyRoll, restlessScale } from './traitWeights';
 import { countPoke, npcRoomba } from './toys/npc';
 import { pokeToy } from './toys/poke';
-import './pongErrands';
-import './toyErrands';
+import { PONG_SHARE } from './pongErrands';
+import { SHARE } from './toyErrands';
 import './events/watch';
 import './roof/roofErrand';
 import type { Pt } from './toys/roombaBrain';
@@ -125,6 +129,19 @@ const TOUR: Errand = {
   end: (id, how) => tourEnded(id, how),
 };
 const CHAT_WAIT = 10; // seconds the first at a chat waits for the others before starting
+const TOY_SHARES = { hoops: SHARE.hoops, pong: PONG_SHARE };
+
+/** Seconds someone sits before their next idle errand, sooner or later by their time of day (traitWeights.ts). */
+function restFor(id: string, arriving = false) {
+  const t = traitsFor(id);
+  return restlessSeconds(Math.random(), arriving) * (t ? restlessScale(t, officeHour()) : 1);
+}
+
+/** The number a restless moment draws to share out what they do: now and then their hobby's toy. */
+function rollFor(id: string) {
+  const t = traitsFor(id);
+  return t ? hobbyRoll(t, Math.random(), Math.random(), TOY_SHARES, rivalFree(id)) : Math.random();
+}
 
 export function ErrandDirector({
   floor,
@@ -237,8 +254,8 @@ export function ErrandDirector({
         status: a.status,
         statusAt: run.clock,
         seatedAt: run.clock,
-        restless: restlessSeconds(Math.random(), true),
-        roll: Math.random(),
+        restless: restFor(a.id, true),
+        roll: rollFor(a.id),
         queue: [],
         phase: 'seated',
         phaseAt: run.clock,
@@ -339,8 +356,8 @@ export function ErrandDirector({
     p.phase = 'seated';
     p.phaseAt = run.clock;
     p.seatedAt = run.clock;
-    p.restless = restlessSeconds(Math.random());
-    p.roll = Math.random();
+    p.restless = restFor(p.id);
+    p.roll = rollFor(p.id);
     p.errand = null;
     p.dest = null;
     p.hurry = false;
@@ -386,7 +403,7 @@ export function ErrandDirector({
       const s = ctx ? e.place(ctx.a, ctx.state) : null;
       dest = s && !taken.has(s.id) && standable(w, s.x, s.z) ? s : null;
     } else {
-      const ids = spotChoices(e.where?.(p.id) ?? e.spot, w.spots.map((s) => s.id), taken);
+      const ids = spotChoices(e.where?.(p.id, ctx?.state) ?? e.spot, w.spots.map((s) => s.id), taken);
       dest = pickSpot(ids.map((id) => spotById(w, id)!), origin, Math.random());
     }
     const path = dest && findPath(w, origin, dest);
@@ -425,6 +442,9 @@ export function ErrandDirector({
       p.chat = chat;
     });
     run.lastChat = run.clock;
+    noteSocial('chat', ids[0], venue, ids.slice(1).join(','));
+    // the floor's relationships grow from it (every tab here reports it; the office counts it once)
+    if (repoId && !useStore.getState().replaying) void api.chatted(repoId, ids, venue).catch(() => undefined);
     return true;
   };
 
@@ -781,10 +801,23 @@ export function ErrandDirector({
     }
     const states = new Map<string, ErrandState>();
     const ready: Person[] = [];
+    const hour = officeHour();
     for (const p of people.values()) {
       const a = byId.get(p.id);
       if (!a) continue;
-      const state: ErrandState = { floor, statusFor: run.clock - p.statusAt, seatedFor: run.clock - p.seatedAt, restless: p.restless, roll: p.roll, home: p.home, others };
+      const state: ErrandState = {
+        floor,
+        statusFor: run.clock - p.statusAt,
+        seatedFor: run.clock - p.seatedAt,
+        restless: p.restless,
+        roll: p.roll,
+        home: p.home,
+        others,
+        traits: traitsFor(p.id),
+        friends: friendsNow(p.id),
+        rivals: rivalsNow(p.id),
+        hour,
+      };
       if (p.phase !== 'seated') {
         // Off on an idle errand, or on the way back, when board work comes in: straight there instead.
         const was = p.errand;
@@ -802,7 +835,10 @@ export function ErrandDirector({
       // every work errand wanted, then one idle errand picked by weight
       const want = wanted(errands(), a, state);
       for (const e of want.filter((x) => x.work)) p.queue = enqueue(p.queue, e.name, run.clock, undefined, true);
-      const idle = choose(want.filter((x) => !x.work), Math.random());
+      // their personality and bonds tip the choice (traitWeights.ts)
+      const t = state.traits;
+      const ctx = { hour, rivalFree: state.rivals?.some((r) => others.some((o) => o.id === r && isFree(o.status))), friendBusy: state.friends?.some((f) => others.some((o) => o.id === f && o.status === 'working')) };
+      const idle = choose(want.filter((x) => !x.work), Math.random(), (e) => (t ? errandWeight(t, e.name, ctx) : 1));
       if (idle) p.queue = enqueue(p.queue, idle.name, run.clock);
       // sent on one by hand (__swarmPeople.send): first in the queue
       if (ask && errandNamed(ask)) p.queue = [{ name: ask, at: run.clock - QUEUE_SECONDS / 2 }, ...p.queue.filter((q) => q.name !== ask)];
@@ -814,7 +850,7 @@ export function ErrandDirector({
       // Waited too long for a slot: skip it, and sit a while before trying again.
       if (kept.length < p.queue.length && p.queue.some((q) => run.clock - q.at >= QUEUE_SECONDS)) {
         p.seatedAt = run.clock;
-        p.restless = restlessSeconds(Math.random());
+        p.restless = restFor(p.id);
       }
       p.queue = kept;
       if (kept.length) ready.push(p);
@@ -822,8 +858,11 @@ export function ErrandDirector({
 
     // Now and then, a few of the restless ones chat instead (office floors: the cooler or the couch).
     if (floor === 'office') {
-      const candidates = [...states].filter(([id]) => isFree(byId.get(id)!.status)).map(([id, s]) => ({ id, home: people.get(id)!.home, seatedFor: s.seatedFor, restless: s.restless }));
-      const plan = planChat(candidates, { away, cap: MAX_WALKERS, sinceLast: run.clock - run.lastChat, rand: Math.random, venues: Object.keys(CHAT_VENUES) });
+      const candidates = [...states]
+        .filter(([id]) => isFree(byId.get(id)!.status))
+        .map(([id, s]) => ({ id, home: people.get(id)!.home, seatedFor: s.seatedFor, restless: s.restless, weight: s.traits ? chatStarterWeight(s.traits) : 1 }));
+      const pull = (a: string, b: string) => (states.get(a)?.friends?.includes(b) ? FRIEND_PULL : 0);
+      const plan = planChat(candidates, { away, cap: MAX_WALKERS, sinceLast: run.clock - run.lastChat, rand: Math.random, venues: Object.keys(CHAT_VENUES), pull });
       if (plan && startChat(plan.ids, plan.venue)) away += plan.ids.length;
     }
 
@@ -841,8 +880,8 @@ export function ErrandDirector({
       if (!went) {
         // nowhere free to go: sit a while longer
         p.seatedAt = run.clock;
-        p.restless = restlessSeconds(Math.random());
-      }
+        p.restless = restFor(p.id);
+      } else noteSocial('errand', p.id, e!.name);
     }
   });
 

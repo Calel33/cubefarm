@@ -3,9 +3,11 @@
 // tenure: a plant that grows, a photo, a desk toy. Drawn per floor rather than per desk, one InstancedMesh per kind
 // of thing plus one mesh for every label (PR numbers, stickers, photos) from a shared canvas atlas, so a floor of
 // fully decorated desks costs about a dozen draw calls. The MVP of the week gets a strip above the floor's sign.
+// Untidy people's desks gather clutter (#267): stacks of paper, snacks and a can.
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { deskItems, mvpOfWeek, newCareer, stickerFor, type DeskToy } from '../../../../shared/careers';
+import { traitsOf } from '../../../../shared/personality';
 import type { Agent } from '../../store';
 import { roundRect, SANS } from '../draw';
 import { useCanvasTexture } from '../interact';
@@ -84,6 +86,17 @@ const TOYS: Record<DeskToy, () => THREE.BufferGeometry> = {
     ]),
 };
 
+// The clutter: a slightly messy stack of paper, a crisp packet, an energy can.
+const papersModel = () =>
+  model('clutter-papers', () => [
+    box(0.21, 0.012, 0.28, '#f8f9fa', [0, 0.006, 0]),
+    box(0.21, 0.01, 0.28, '#e9ecef', [0.012, 0.017, -0.008], [0, 0.12, 0]),
+    box(0.21, 0.01, 0.28, '#ffffff', [-0.008, 0.027, 0.01], [0, -0.09, 0]),
+    box(0.08, 0.004, 0.012, '#ffd166', [0.06, 0.034, -0.1]),
+  ]);
+const snackModel = () => model('clutter-snack', () => [box(0.1, 0.035, 0.14, '#ef476f', [0, 0.018, 0], [0.12, 0, 0.06]), box(0.06, 0.036, 0.05, '#ffd166', [0, 0.02, 0.01], [0.12, 0, 0.06])]);
+const canModel = () => model('clutter-can', () => [cyl(0.03, 0.03, 0.11, '#06d6a0', [0, 0.055, 0]), cyl(0.026, 0.03, 0.01, '#adb5bd', [0, 0.115, 0]), cyl(0.031, 0.031, 0.02, '#1f1d2b', [0, 0.06, 0])]);
+
 // ---------- the label atlas ----------
 
 const CELL = 64;
@@ -156,6 +169,9 @@ interface Story {
   foliage: THREE.Matrix4[];
   frames: THREE.Matrix4[];
   toys: Record<DeskToy, THREE.Matrix4[]>;
+  papers: THREE.Matrix4[];
+  snacks: THREE.Matrix4[];
+  cans: THREE.Matrix4[];
   labels: { label: Label; m: THREE.Matrix4; w: number; h: number }[];
 }
 
@@ -172,12 +188,12 @@ function idHash(id: string) {
 }
 
 function buildStory(agents: Agent[], now: number): Story {
-  const story: Story = { shelves: [], plaques: [], stars: [], pots: [], foliage: [], frames: [], toys: { duck: [], speaker: [], cradle: [], magnifier: [] }, labels: [] };
+  const story: Story = { shelves: [], plaques: [], stars: [], pots: [], foliage: [], frames: [], toys: { duck: [], speaker: [], cradle: [], magnifier: [] }, papers: [], snacks: [], cans: [], labels: [] };
   for (const a of agents) {
     if (a.role !== 'dev' && a.role !== 'qa') continue;
     const p = a.role === 'qa' ? qaDeskPosition(a.desk) : deskPosition(a.desk);
     const frame = new THREE.Matrix4().makeRotationY(a.role === 'qa' ? QA_ROTATION : 0).setPosition(p.x, 0, p.z);
-    const lay = deskLayout(deskItems(a.career ?? newCareer(now), a, now), a.role);
+    const lay = deskLayout(deskItems(a.career ?? newCareer(now), a, now), a.role, traitsOf(a).tidiness);
     if (lay.shelf) story.shelves.push(at(frame, { x: 0, y: SHELF.y, z: SHELF.z }));
     for (const { n, at: s } of lay.plaques) {
       story.plaques.push(at(frame, s));
@@ -197,6 +213,9 @@ function buildStory(agents: Agent[], now: number): Story {
       story.labels.push({ label: { kind: 'photo', i: idHash(a.id) % PHOTOS }, m: at(frame, lay.photo, offset(0, PHOTO.h / 2 + 0.005, 0.0065)), w: PHOTO.w - 0.02, h: PHOTO.h - 0.02 });
     }
     if (lay.toy) story.toys[lay.toy.kind].push(at(frame, lay.toy.at));
+    for (const s of lay.clutter.papers) story.papers.push(at(frame, s));
+    for (const s of lay.clutter.snacks) story.snacks.push(at(frame, s));
+    if (lay.clutter.can) story.cans.push(at(frame, lay.clutter.can));
   }
   return story;
 }
@@ -261,7 +280,7 @@ function storyKey(agents: Agent[]) {
     .filter((a) => a.role === 'dev' || a.role === 'qa')
     .map((a) => {
       const c = a.career;
-      return `${a.id}:${a.role}:${a.desk}:${a.specialty}:${c ? `${c.since}:${c.merged}:${c.firstPass}:${c.recent.map((r) => r.n).join('.')}:${Object.keys(c.bySpecialty).join('.')}` : '-'}`;
+      return `${a.id}:${a.role}:${a.desk}:${a.specialty}:${traitsOf(a).tidiness}:${c ? `${c.since}:${c.merged}:${c.firstPass}:${c.recent.map((r) => r.n).join('.')}:${Object.keys(c.bySpecialty).join('.')}` : '-'}`;
     })
     .join('|');
 }
@@ -315,6 +334,9 @@ export function DeskStory({ agents }: { agents: Agent[] }) {
       {(Object.keys(story.toys) as DeskToy[]).map((kind) => (
         <Instances key={kind} geometry={TOYS[kind]()} matrices={story.toys[kind]} />
       ))}
+      <Instances geometry={papersModel()} matrices={story.papers} />
+      <Instances geometry={snackModel()} matrices={story.snacks} />
+      <Instances geometry={canModel()} matrices={story.cans} />
       {story.labels.length > 0 && <mesh geometry={labels} material={atlas.material} />}
     </group>
   );

@@ -4981,3 +4981,89 @@ html[data-high-contrast] :is(button, a, input, select, textarea, summary, [tabin
   outline-offset: 2px;
   box-shadow: 0 0 0 6px #ffe066;
 }
+
+/* ---------- personalities and relationships (#267) ---------- */
+
+.trait-scale input[type='range'] {
+  width: 100%;
+  accent-color: var(--accent, #4f6bed);
+}
+.trait-ends {
+  display: flex;
+  justify-content: space-between;
+  gap: 6px;
+}
+.career-traits {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.career-trait {
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: #eef2ff;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+.career-bonds {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.career-bond {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px 3px 3px;
+  border-radius: 999px;
+  border: 2px solid var(--bond, #2f9e44);
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+.career-bond .career-portrait {
+  border-width: 1.5px;
+  border-radius: 50%;
+}
+.chemistry {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  align-items: flex-start;
+}
+.chemistry svg {
+  flex: 1 1 360px;
+  max-width: 520px;
+  background: #fffaf2;
+  border: 2px solid rgba(31, 29, 43, 0.15);
+  border-radius: 14px;
+}
+.chemistry-side {
+  flex: 1 1 220px;
+  min-width: 0;
+}
+.chemistry-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.chemistry-key {
+  display: inline-block;
+  width: 22px;
+  height: 4px;
+  border-radius: 2px;
+  vertical-align: middle;
+  margin-right: 4px;
+}
+.chemistry-pairs {
+  margin: 6px 0;
+  padding-left: 20px;
+}
+.chemistry-recent {
+  list-style: none;
+  margin: 6px 0;
+  padding: 0;
+  font-size: 0.85rem;
+}
+.chemistry-recent li {
+  padding: 2px 0;
+}

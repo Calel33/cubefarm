@@ -18,7 +18,7 @@ import { bodyTarget, forcedExpression, handFood, handMug, isHidden, seatBody, se
 import { mergedAt, takeReaction, trackLife } from './reactionFeed';
 import { SpeechBubble } from './SpeechBubble';
 import { ThemeCostume } from './themes/ThemeCostume';
-import { MugLook, mugColor } from './toys/mugLook';
+import { MugLook, mugColor, mugDrink } from './toys/mugLook';
 import { holdsPaddle, pongPaddle } from './toys/pongState';
 import { PaddleLook } from './PongTable';
 import { Ball, Cyl } from './Toon';
@@ -27,6 +27,7 @@ import { useHitReaction } from './useHitReaction';
 import { Zzz } from './Zzz';
 import { cheerVoice } from '../ui/cheerRules';
 import { cheerFrom } from '../ui/cheerSfx';
+import { cheerBoost } from './social';
 import { hearBody, hearing } from '../ui/peopleSounds';
 
 // A cartoon developer. Origin is the floor under the chair; they face -Z (toward the desk). Seated by default; the
@@ -332,7 +333,7 @@ export function Character({
     if (party && !voice.party && head.current) {
       // the arms go up: a "woo!" from their head
       head.current.getWorldPosition(voice.head);
-      cheerFrom(voice.v, voice.head.x, voice.head.y, voice.head.z);
+      cheerFrom(voice.v, voice.head.x, voice.head.y, voice.head.z, cheerBoost(agent.id)); // louder for a friend's merge
     }
     voice.party = party;
 
@@ -656,7 +657,7 @@ export function Character({
                   {carried && (
                     <group ref={handCup} position={HAND_MUG.at} visible={false}>
                       <group position={[0, 0, HAND_MUG.ahead]} rotation={[0, -Math.PI / 2, 0]} scale={HAND_MUG.scale}>
-                        <MugLook color={mugColor(carried.id)} sips={carried.sips} shadow={false} />
+                        <MugLook color={mugColor(carried.id)} drink={mugDrink(carried.id)} sips={carried.sips} shadow={false} />
                       </group>
                     </group>
                   )}

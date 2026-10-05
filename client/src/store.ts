@@ -8,6 +8,7 @@ import { speechText } from '../../shared/speech';
 import { showDesktopNote } from './notifications';
 import { EMPTY_OPS, newAlarms } from './ops';
 import type { DecorItem, ProgressView } from '../../shared/progress';
+import type { SocialView } from '../../shared/relations';
 import { needsManager, qaCardNote, type CardTone } from './qaCard';
 import { announce } from './ui/announce';
 import { alarm, audioUnlocked, chirp, cue } from './ui/sfx';
@@ -43,7 +44,7 @@ export type Overlay =
 /** Help's tabs: how the office works, and the controls (keys, mouse, gamepad). */
 export type HelpTab = 'office' | 'controls';
 
-export type ManagerTab = 'floors' | 'ops' | 'ceo' | 'team' | 'issues' | 'settings' | 'timelapse' | 'access';
+export type ManagerTab = 'floors' | 'ops' | 'ceo' | 'team' | 'chemistry' | 'issues' | 'settings' | 'timelapse' | 'access';
 
 export interface Focus {
   id: string;
@@ -126,6 +127,7 @@ interface State {
   ticker: TickerItem[]; // the floors' recent activity lines, oldest first (world/ActivityTicker.tsx)
   notifyChannels: NotifyChannelsView; // which chat apps have a webhook saved (hints only) and how many devices get push
   pong: Record<string, PongRow[]>; // each floor's ping-pong leaderboard by repo id, best first
+  social: Record<string, SocialView>; // each floor's relationships by repo id (shared/relations.ts)
   restarting: boolean; // the connection dropped because the office is restarting to update
   visitors: VisitorView[]; // everyone else appearing in the office, any floor (presence; their poses skip the store)
   replaying: boolean; // the time-lapse (replay.ts) is showing a recorded day: live events wait, live actions are off
@@ -251,6 +253,7 @@ export const useStore = create<State>((set, get) => ({
   ticker: [],
   notifyChannels: { webhooks: { discord: { set: false, hint: '' }, slack: { set: false, hint: '' }, telegram: { set: false, hint: '' }, ntfy: { set: false, hint: '' } }, pushDevices: 0 },
   pong: {},
+  social: {},
   restarting: false,
   visitors: [],
   replaying: false,
@@ -319,6 +322,7 @@ export const useStore = create<State>((set, get) => ({
           notifyChannels: d.notifyChannels ?? get().notifyChannels,
           progress: d.progress ?? { floors: {}, achievements: [], coffees: 0, merges: 0 },
           pong: d.pong ?? {},
+          social: d.social ?? {},
           restarting: false,
           floor: floorExists ? get().floor : 0,
         });
@@ -525,6 +529,9 @@ export const useStore = create<State>((set, get) => ({
         break;
       case 'pong':
         set({ pong: { ...get().pong, [ev.repoId]: ev.board } });
+        break;
+      case 'social':
+        set({ social: { ...get().social, [ev.repoId]: ev.social } });
         break;
     }
   },

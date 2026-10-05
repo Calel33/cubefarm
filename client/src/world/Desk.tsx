@@ -19,7 +19,7 @@ import { BLOOM } from './gfx/bloomMarks';
 import { DeskGlow } from './gfx/ScreenGlow';
 import { shade, toon } from './materials';
 import { deskMug, subscribeMugs } from './people';
-import { MUG_SIZE, MugLook, mugColor } from './toys/mugLook';
+import { MUG_SIZE, MugLook, mugColor, mugDrink } from './toys/mugLook';
 import { useKeyName } from '../ui/controls';
 
 const SCREEN = { w: 1.0, h: 0.6, px: 896, py: 538 };
@@ -240,7 +240,7 @@ function DeskMug({ agentId, color }: { agentId: string; color: string }) {
   return (
     // the parent group sits at the plain mug's centre, 0.82 (desk top 0.77 plus half its height)
     <group position={[0, MUG_SIZE.h / 2 - 0.05, 0]} rotation={[0, Math.PI / 2, 0]}>
-      <MugLook color={mugColor(fresh.id)} sips={fresh.sips} />
+      <MugLook color={mugColor(fresh.id)} drink={mugDrink(fresh.id)} sips={fresh.sips} />
     </group>
   );
 }

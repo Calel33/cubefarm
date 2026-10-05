@@ -80,11 +80,16 @@ export const headingTo = (from: Pt, to: Pt) => Math.atan2(-(to.x - from.x), -(to
 /** How far (m) an idle developer will walk to look over a busy teammate's shoulder. */
 export const VISIT_RANGE = 9;
 
-/** The busy developer nearest someone's desk, within VISIT_RANGE; null when nobody nearby is working. */
-export function busyNeighbour(me: ErrandPeer | { id: string; home: Pt }, others: readonly ErrandPeer[]): ErrandPeer | null {
+/**
+ * The busy developer nearest someone's desk, within VISIT_RANGE; null when nobody nearby is working. A busy friend
+ * comes first, from twice as far: friends seek each other out.
+ */
+export function busyNeighbour(me: ErrandPeer | { id: string; home: Pt }, others: readonly ErrandPeer[], friends: readonly string[] = []): ErrandPeer | null {
   const busy = others.filter((o) => o.id !== me.id && o.role === 'dev' && o.status === 'working');
-  const close = busy.filter((o) => Math.hypot(o.home.x - me.home.x, o.home.z - me.home.z) <= VISIT_RANGE);
-  return nearest({ id: me.id, ...me.home }, close.map((o) => ({ ...o, x: o.home.x, z: o.home.z })));
+  const within = (o: ErrandPeer, r: number) => Math.hypot(o.home.x - me.home.x, o.home.z - me.home.z) <= r;
+  const pts = (list: ErrandPeer[]) => list.map((o) => ({ ...o, x: o.home.x, z: o.home.z }));
+  const friend = nearest({ id: me.id, ...me.home }, pts(busy.filter((o) => friends.includes(o.id) && within(o, VISIT_RANGE * 2))));
+  return friend ?? nearest({ id: me.id, ...me.home }, pts(busy.filter((o) => within(o, VISIT_RANGE))));
 }
 
 /** Just behind a seated developer's shoulder, looking at their screen. */
@@ -94,10 +99,10 @@ export function shoulderSpot(host: ErrandPeer): Spot {
 
 const visit: Errand = {
   name: 'visit',
-  when: (a, s) => a.role === 'dev' && s.floor === 'office' && isFree(a.status) && restless(s) && !!s.home && !!s.others && !!busyNeighbour({ id: a.id, home: s.home }, s.others),
+  when: (a, s) => a.role === 'dev' && s.floor === 'office' && isFree(a.status) && restless(s) && !!s.home && !!s.others && !!busyNeighbour({ id: a.id, home: s.home }, s.others, s.friends),
   spot: [],
   place: (a, s) => {
-    const host = s.home && s.others ? busyNeighbour({ id: a.id, home: s.home }, s.others) : null;
+    const host = s.home && s.others ? busyNeighbour({ id: a.id, home: s.home }, s.others, s.friends) : null;
     return host && shoulderSpot(host);
   },
   steps: [
@@ -164,6 +169,8 @@ export interface ChatCandidate {
   home: Pt;
   seatedFor: number;
   restless: number;
+  /** How likely they start one (extroverts more: traitWeights.ts chatStarterWeight); 1 when left out. */
+  weight?: number;
 }
 
 export interface ChatPlan {
@@ -172,22 +179,36 @@ export interface ChatPlan {
 }
 
 /**
- * Whether a chat starts now, and who joins: someone restless and their one or two nearest free neighbours who have
- * sat a while, if the walker cap has room for all of them. `candidates` are free people at their desks; `rand`
- * gives numbers in [0, 1).
+ * Whether a chat starts now, and who joins: someone restless (by their weight) and their one or two nearest free
+ * neighbours who have sat a while, if the walker cap has room for all of them. `pull` brings friends nearer (metres
+ * off the distance). `candidates` are free people at their desks; `rand` gives numbers in [0, 1).
  */
-export function planChat(candidates: readonly ChatCandidate[], o: { away: number; cap: number; sinceLast: number; rand: () => number; venues: readonly string[] }): ChatPlan | null {
+export function planChat(
+  candidates: readonly ChatCandidate[],
+  o: { away: number; cap: number; sinceLast: number; rand: () => number; venues: readonly string[]; pull?: (a: string, b: string) => number },
+): ChatPlan | null {
   if (o.sinceLast < CHAT_GAP || !o.venues.length) return null;
   const room = o.cap - o.away;
   if (room < 2) return null;
   const starters = candidates.filter((c) => c.seatedFor >= c.restless);
   if (!starters.length || o.rand() >= CHAT_CHANCE) return null;
-  const first = starters[Math.floor(o.rand() * starters.length)];
-  const d = (c: ChatCandidate) => Math.hypot(c.home.x - first.home.x, c.home.z - first.home.z);
+  const first = pickWeighted(starters, o.rand());
+  const d = (c: ChatCandidate) => Math.hypot(c.home.x - first.home.x, c.home.z - first.home.z) - (o.pull?.(first.id, c.id) ?? 0);
   const partners = candidates.filter((c) => c.id !== first.id && c.seatedFor >= CHAT_MIN_SEATED).sort((a, b) => d(a) - d(b));
   const size = Math.min(o.rand() < 0.5 ? 2 : 3, room, partners.length + 1);
   if (size < 2) return null;
   return { ids: [first.id, ...partners.slice(0, size - 1).map((c) => c.id)], venue: o.venues[Math.floor(o.rand() * o.venues.length)] };
+}
+
+/** One of `list` at random by weight (`rand` in [0, 1)). */
+function pickWeighted(list: readonly ChatCandidate[], rand: number): ChatCandidate {
+  const total = list.reduce((t, c) => t + (c.weight ?? 1), 0);
+  let r = rand * total;
+  for (const c of list) {
+    r -= c.weight ?? 1;
+    if (r < 0) return c;
+  }
+  return list[list.length - 1];
 }
 
 /**

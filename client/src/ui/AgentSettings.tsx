@@ -4,6 +4,7 @@ import { isBusy, useStore, type Agent } from '../store';
 import type { AgentCli, AgentPromptView, CliView, EffortLevel, SwarmSettings } from '../../../shared/types';
 import { ACCENT_COLORS, BUILDS, FACIAL_HAIR, GLASSES, HAIR_COLORS, HAIR_STYLES, HEADWEAR, OUTFITS, SKIN_TONES, type AgentStyle, type HairStyle, type Outfit } from '../../../shared/looks';
 import { CLAUDE_MODELS, effectiveModel, modelSuggestions } from '../../../shared/models';
+import { CATCHPHRASE_MAX, DRINK_LABELS, DRINKS, ENERGY_LABELS, HOBBIES, HOBBY_LABELS, SCALE_MAX, SOCIAL_LABELS, TIDY_LABELS, traitsOf, type Traits } from '../../../shared/personality';
 import { TALL_HAIR, appearanceFor, randomStyle } from '../world/appearance';
 import { LookPreview } from '../world/LookPreview';
 
@@ -267,6 +268,62 @@ export function LookEditor({ agent }: { agent: Agent }) {
   );
 }
 
+/** A 0-4 trait as a slider between its two ends, saying where it is now. */
+function TraitScale({ label, value, labels, onPick }: { label: string; value: number; labels: readonly string[]; onPick: (v: number) => void }) {
+  const id = useId();
+  return (
+    <label className="field trait-scale" htmlFor={id}>
+      <span>
+        {label}: <b>{labels[value]}</b>
+      </span>
+      <input id={id} type="range" min={0} max={SCALE_MAX} step={1} value={value} aria-valuetext={labels[value]} onChange={(e) => onPick(Number(e.target.value))} />
+      <span className="trait-ends muted small" aria-hidden="true">
+        <span>{labels[0]}</span>
+        <span>{labels[SCALE_MAX]}</span>
+      </span>
+    </label>
+  );
+}
+
+/**
+ * Their personality (#267), next to their look: each pick is saved straight onto the agent and nudges what they do in
+ * the office at once (errands, drinks, toys, clutter, what they say). Seeded from their id when hired.
+ */
+export function PersonalityEditor({ agent }: { agent: Agent }) {
+  const t = traitsOf(agent);
+  const pick = (patch: Partial<Traits>) => void save(agent.id, { traits: patch });
+  const phraseId = useId();
+  return (
+    <fieldset className="look-editor personality-editor">
+      <legend>Personality</legend>
+      <div className="look-fields">
+        <TraitScale label="Social" value={t.social} labels={SOCIAL_LABELS} onPick={(social) => pick({ social })} />
+        <TraitScale label="Energy" value={t.energy} labels={ENERGY_LABELS} onPick={(energy) => pick({ energy })} />
+        <TraitScale label="Desk" value={t.tidiness} labels={TIDY_LABELS} onPick={(tidiness) => pick({ tidiness })} />
+        <PickSelect label="Drink" value={t.drink} options={DRINKS} labels={DRINK_LABELS} onPick={(drink) => pick({ drink })} />
+        <PickSelect label="Hobby" value={t.hobby} options={HOBBIES} labels={HOBBY_LABELS} onPick={(hobby) => pick({ hobby })} />
+        <label className="field" htmlFor={phraseId}>
+          <span>Catchphrase</span>
+          <input
+            id={phraseId}
+            key={`c-${t.catchphrase}`}
+            defaultValue={t.catchphrase}
+            maxLength={CATCHPHRASE_MAX}
+            placeholder="Something they say"
+            onBlur={(e) => e.target.value.trim() !== t.catchphrase && pick({ catchphrase: e.target.value })}
+          />
+        </label>
+      </div>
+      <div className="row wrap">
+        <button type="button" className="btn btn-small btn-ghost" onClick={() => void save(agent.id, { traits: null })}>
+          ↺ Back to their seeded personality
+        </button>
+        <span className="muted small">Small nudges: where they wander, what they drink and play, how their desk looks, when they perk up.</span>
+      </div>
+    </fieldset>
+  );
+}
+
 /** The job description. `compact` saves on blur (the Team tab); otherwise it's roomy, counted and saved explicitly. */
 export function BriefEditor({ agent, id, compact }: FieldProps & { compact?: boolean }) {
   const [text, setText] = useState(agent.brief);
@@ -427,6 +484,7 @@ export function AgentSetup({ agent }: { agent: Agent }) {
         )}
       </div>
       <LookEditor agent={agent} />
+      <PersonalityEditor agent={agent} />
       {!ceo && (
         <label className="field" htmlFor={`${id}-brief`}>
           <span>Job description</span>
@@ -434,7 +492,7 @@ export function AgentSetup({ agent }: { agent: Agent }) {
       )}
       {!ceo && <BriefEditor agent={agent} id={`${id}-brief`} />}
       <PromptPreview agent={agent} />
-      <p className="muted small">Name, model, effort and the other fields save when you leave them; looks save as you pick them. Running sessions aren't restarted.</p>
+      <p className="muted small">Name, model, effort and the other fields save when you leave them; looks and personality save as you pick them. Running sessions aren't restarted.</p>
     </section>
   );
 }

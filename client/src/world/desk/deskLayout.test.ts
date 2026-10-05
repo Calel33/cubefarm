@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { deskItems, newCareer, PLAQUES } from '../../../../shared/careers';
-import { deskLayout, MONITOR, moreSpot, PLAQUE, plaqueSpot, photoSpot, plantSpot, STICKER, starSpot, stickerSpot, toySpot } from './deskLayout';
+import { CAN_SPOT, clutter, deskLayout, MONITOR, PAPER_SPOTS, SNACK_SPOTS, moreSpot, PLAQUE, plaqueSpot, photoSpot, plantSpot, STICKER, starSpot, stickerSpot, toySpot } from './deskLayout';
 
 const NOW = Date.UTC(2026, 9, 4, 12);
 const DAY = 24 * 3_600_000;
@@ -30,10 +30,27 @@ describe('a desk with a story', () => {
       { x: -0.56, z: 0.2, r: 0.12 }, // the lunch plate
     ];
     for (const p of [photoSpot(), toySpot()]) for (const b of busy) expect(Math.hypot(p.x - b.x, p.z - b.z), JSON.stringify({ p, b })).toBeGreaterThan(b.r + 0.05);
+    // clutter keeps clear of all that too, of the personal items, and stays on the desk (1.9 x 0.95)
+    const mine = [photoSpot(), toySpot(), plantSpot('dev')].map((p) => ({ x: p.x, z: p.z, r: 0.08 }));
+    for (const p of [...PAPER_SPOTS, ...SNACK_SPOTS, CAN_SPOT]) {
+      for (const b of [...busy, ...mine]) expect(Math.hypot(p.x - b.x, p.z - b.z), JSON.stringify({ p, b })).toBeGreaterThan(b.r + 0.04);
+      expect(Math.abs(p.x)).toBeLessThan(0.95 - 0.04);
+      expect(Math.abs(p.z)).toBeLessThan(0.475 - 0.03);
+    }
     // the testers' plant stands behind their test tubes, inside the desk
     const qa = plantSpot('qa');
     expect(qa.z - 0.07).toBeGreaterThan(-0.475);
     expect(qa.z + 0.07).toBeLessThan(-0.25);
+  });
+
+  it('piles up clutter with untidiness, and none on a tidy desk', () => {
+    const count = (t: number) => {
+      const c = clutter(t);
+      return c.papers.length + c.snacks.length + (c.can ? 1 : 0);
+    };
+    expect([0, 1, 2, 3, 4].map(count)).toEqual([0, 0, 1, 3, 6]);
+    expect(deskLayout(deskItems(newCareer(NOW), { specialty: '', role: 'dev' }, NOW), 'dev').clutter.papers).toEqual([]);
+    expect(deskLayout(deskItems(newCareer(NOW), { specialty: '', role: 'dev' }, NOW), 'dev', 4).clutter.can).toEqual(CAN_SPOT);
   });
 
   it('shows what the career earned, and only that', () => {

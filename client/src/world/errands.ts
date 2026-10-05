@@ -3,9 +3,11 @@
 // to, who may go when, the walker cap, the per-person queue and following a path. ErrandDirector.tsx runs it on the
 // floor you're on. Purely cosmetic: nothing here touches the store or the server.
 
+import type { Traits } from '../../../shared/personality';
 import type { AgentStatus } from '../../../shared/types';
 import type { Gesture } from './body';
 import type { Pt } from './toys/roombaBrain';
+import { stretchSpots } from './traitWeights';
 import type { FloorKind, Spot } from './walkways';
 
 /** What an errand needs to know about someone. */
@@ -34,6 +36,11 @@ export interface ErrandState {
   /** Their own desk's spot, and everyone else on the floor (for errands to a teammate). */
   home?: Spot;
   others?: readonly ErrandPeer[];
+  /** Their personality, their friends and rivals on the floor, and the office hour (traitWeights.ts). */
+  traits?: Traits;
+  friends?: readonly string[];
+  rivals?: readonly string[];
+  hour?: number;
 }
 
 export interface ErrandStep {
@@ -73,8 +80,8 @@ export interface Errand {
   speed?: number;
   /** Work errands that may still start this many seconds into 'working' (a tester fetching the PR they were just given). */
   grace?: number;
-  /** Where to for this person, overriding `spot` (an errand to one particular board column). */
-  where?(agentId: string): readonly string[];
+  /** Where to for this person, overriding `spot` (an errand to one particular board column, or by their traits). */
+  where?(agentId: string, state?: ErrandState): readonly string[];
   /** Asked just before they set off, once a spot is free: false leaves it queued for now (only so many at the board at once). */
   claim?(agentId: string): boolean;
   /** A step with a `cue` is starting; false cuts the errand short and sends them back. */
@@ -183,14 +190,18 @@ export function wanted(registry: readonly Errand[], agent: ErrandAgent, state: E
   return [...out.filter((e) => e.work), ...out.filter((e) => !e.work)];
 }
 
-/** One of the wanted errands: a work errand first, else an idle one at random by weight (`rand` in [0, 1)). */
-export function choose(list: readonly Errand[], rand: number): Errand | null {
+/**
+ * One of the wanted errands: a work errand first, else an idle one at random by weight (`rand` in [0, 1)), each
+ * weight scaled by `nudge` (someone's personality, traitWeights.ts) when given.
+ */
+export function choose(list: readonly Errand[], rand: number, nudge: (e: Errand) => number = () => 1): Errand | null {
   const work = list.find((e) => e.work);
   if (work) return work;
-  const total = list.reduce((t, e) => t + (e.weight ?? 1), 0);
+  const w = (e: Errand) => (e.weight ?? 1) * nudge(e);
+  const total = list.reduce((t, e) => t + w(e), 0);
   let r = rand * total;
   for (const e of list) {
-    r -= e.weight ?? 1;
+    r -= w(e);
     if (r < 0) return e;
   }
   return list[list.length - 1] ?? null;
@@ -271,6 +282,8 @@ const stretch: Errand = {
   name: 'stretch',
   when: (agent, s) => isFree(agent.status) && s.seatedFor >= s.restless,
   spot: ['cooler', 'window-*'],
+  // introverts at a window, extroverts by the cooler
+  where: (_id, s) => (s?.floor === 'office' ? stretchSpots(s.traits) : ['cooler', 'window-*']),
   steps: [
     { gesture: 'none', seconds: 3 },
     { gesture: 'stretch', seconds: 1.4 },

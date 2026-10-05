@@ -6,8 +6,12 @@
 
 import type { Gesture } from './body';
 import { isFree, registerErrand, type Act, type ErrandPeer, type ErrandScript } from './errands';
+import { useStore } from '../store';
+import { sayLine } from './Chatter';
 import { say } from './people';
-import { claimSeat, leaveSeat, npcPong, readySeat, seatOf, startNpcMatch, tableFree, wantsOpponent } from './toys/pongState';
+import { noteSocial, rivalsNow } from './social';
+import { trashTalk } from './traitWeights';
+import { claimSeat, leaveSeat, npcPong, pongMatch, readySeat, seatOf, startNpcMatch, tableFree, wantsOpponent } from './toys/pongState';
 import { otherEnd, type End } from './toys/pongPhysics';
 
 /** Restless people share out what they do by their roll (ErrandState.roll): this slice starts a game (toyErrands.ts has 0-0.5). */
@@ -23,11 +27,21 @@ const WAITING = 30; // s a starter waits at the table for someone to come and pl
 /** Faces down the table from `end`: body.ts heading 0 faces -Z, so west (looking +x) is -π/2. */
 const facing = (end: End) => (end === 'west' ? -Math.PI / 2 : Math.PI / 2);
 
+/** Seconds between a rival's trash talk across the table. */
+const TRASH_GAP = [9, 18] as const;
+
+/** Whoever plays the other end, when it's a rival of `id`'s (the player is nobody's rival). */
+function rivalOpposite(id: string, end: 'west' | 'east'): string | null {
+  const seat = pongMatch()?.seats[otherEnd(end)];
+  return seat?.kind === 'agent' && rivalsNow(id).includes(seat.id) ? seat.id : null;
+}
+
 /** One person at the table, from when they get to their end until they leave it (the script starts as they set off). */
 function atTable(id: string): ErrandScript {
   const act: Act = { do: 'stand', x: 0, z: 0, heading: 0, gesture: 'none' };
   let bye = 0;
   let waited = 0;
+  let talk = 3 + Math.random() * 5;
   const stand = (h: number, gesture: Gesture) => Object.assign(act, { do: 'stand', heading: h, gesture } as const);
   return {
     tick(me) {
@@ -46,6 +60,13 @@ function atTable(id: string): ErrandScript {
         return stand(facing(end), 'paddle');
       }
       waited = 0;
+      // rivals trash-talk each other now and then over the game
+      if ((talk -= me.dt) <= 0) {
+        talk = TRASH_GAP[0] + Math.random() * (TRASH_GAP[1] - TRASH_GAP[0]);
+        const rival = rivalOpposite(id, end);
+        const name = rival ? useStore.getState().agents[rival]?.name : undefined;
+        if (rival && name && sayLine(id, trashTalk(name, Math.random()))) noteSocial('trash-talk', id, name, rival);
+      }
       return Object.assign(act, { do: 'step', x: cmd.x, z: cmd.z, heading: cmd.heading, gesture: cmd.gesture, speed: cmd.speed } as const);
     },
     end() {

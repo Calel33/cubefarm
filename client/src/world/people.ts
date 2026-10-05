@@ -224,6 +224,9 @@ export function takeAsk(id: string) {
   return name;
 }
 
+/** Sends someone seated on an errand by name as soon as the rules and the walker cap allow (a friend's high five). */
+export const sendOnErrand = (id: string, errand: string) => void asks.set(id, errand);
+
 const round = (n: number) => Math.round(n * 100) / 100;
 const modeOf = (s: BodyState): BodyMode => (s.stage === 'seated' ? 'seated' : s.speed > 0.05 ? 'walking' : 'standing');
 

@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { useFrame } from '@react-three/fiber';
+import { traitsOf } from '../../../shared/personality';
 import { CEO_ID } from '../../../shared/types';
 import { isBusy, useStore, type Agent, type Focus } from '../store';
 import { babble, babbleNodes, hushBabble, moveBabble, renderBabble } from '../ui/babble';
@@ -11,7 +12,9 @@ import type { BodyState } from './body';
 import { CI_SLOW, DEMO_CI_SLOW, currentWork, greeting, lastFile, logNews, slowChecks, storeNews, type Said } from './chatterEvents';
 import { isFree } from './errands';
 import type { Pick as AimPick } from './interact';
-import { bodyState, errandOf, liveBodies, say, saying } from './people';
+import { bodyState, errandOf, isSeated, liveBodies, say, saying } from './people';
+import { officeHour, traitsFor } from './social';
+import { drinkLines, routineFor, withCatchphrase } from './traitWeights';
 
 // Lives inside the Canvas: the people on the floor you're on talk. Lines come from what happens in the office (the
 // store's changes, read by chatterEvents.ts), from a chat at the cooler (ErrandDirector.tsx asks chatSay), from you
@@ -25,6 +28,8 @@ interface Line {
   who: string;
   near?: boolean;
   event: ChatterEvent;
+  /** Their own words instead of the event's (a routine's line). */
+  text?: string;
   priority: Priority;
   /** Clock seconds: when it may start, and when it's old news. */
   at: number;
@@ -77,6 +82,9 @@ const recent: Heard[] = [];
 const logSeen = new Map<string, number>();
 const errandSeen = new Map<string, string>();
 const ambientAt = new Map<string, number>();
+const routineAt = new Map<string, number>();
+/** Seconds between someone's routine lines at their desk (lively chatter only). */
+const ROUTINE_GAP: readonly [number, number] = [45, 110];
 let ceoAt: number | null = null;
 const ciSince = new Map<string, number>();
 const ciDone = new Set<string>();
@@ -156,7 +164,7 @@ function speak(id: string, what: ChatterEvent | string, priority: Priority, slot
   const t = clock();
   const a = useStore.getState().agents[id];
   const heard = recent.slice(-HEARD).map((r) => r.line);
-  const text = typeof what === 'string' ? what : chatterLine(what, Math.random, lastLine.get(id) ?? null, heard);
+  const text = typeof what === 'string' ? what : personal(id, what, chatterLine(what, Math.random, lastLine.get(id) ?? null, heard));
   const secs = seconds ?? bubbleSeconds(text);
   say(id, text, secs);
   let voiced = false;
@@ -174,6 +182,17 @@ function speak(id: string, what: ChatterEvent | string, priority: Priority, slot
   if (priority !== 'greet') floorLast = t;
   recent.push({ at: Math.round(performance.now()), id, name: a?.name ?? id, line: text, why: typeof what === 'string' ? 'say' : what.kind, voiced, d: round(d), slot });
   if (recent.length > RECENT) recent.splice(0, recent.length - RECENT);
+}
+
+/** Their personality in a line (traitWeights.ts): their own drink at the coffee machine, now and then their catchphrase. */
+function personal(id: string, e: ChatterEvent, line: string): string {
+  const t = traitsFor(id);
+  if (!t) return line;
+  if (e.kind === 'coffee') {
+    const lines = drinkLines(t);
+    return lines[Math.floor(Math.random() * lines.length)];
+  }
+  return e.kind === 'greet' || e.kind === 'chat' ? withCatchphrase(line, t, Math.random()) : line;
 }
 
 /** Lines wait at most `ttl` seconds (LINE_TTL) for their turn. */
@@ -236,6 +255,22 @@ function smallTalk(st: StoreState, t: number) {
     const w = due !== undefined && currentWork(st.logs[id] ?? [], now);
     if (w) queue({ who: id, event: { kind: 'work', ...w }, delay: 0, priority: 'ambient' });
   }
+  // Their routine at their desk with nothing to do: in early with a coffee, late with music, an afternoon hobby.
+  if (pace.ambient) {
+    const hour = officeHour();
+    for (const id of liveBodies().keys()) {
+      const a = st.agents[id];
+      if (!a || a.role === 'ceo' || !isFree(a.status) || !isSeated(id)) continue;
+      const due = routineAt.get(id);
+      if (due === undefined || t < due) {
+        if (due === undefined) routineAt.set(id, t + between(ROUTINE_GAP) * Math.random());
+        continue;
+      }
+      routineAt.set(id, t + between(ROUTINE_GAP));
+      const r = routineFor(traitsOf(a), hour);
+      if (r?.line) pending.push({ who: id, event: { kind: 'coffee' }, text: r.line, priority: 'ambient', at: t, ttl: t + LINE_TTL });
+    }
+  }
   const ceo = st.agents[CEO_ID];
   if (!ceo || !liveBodies().has(CEO_ID)) {
     ceoAt = null;
@@ -287,7 +322,7 @@ function startLines(st: StoreState, t: number) {
       continue;
     }
     pending.splice(k, 1);
-    speak(id, line.event, line.priority, slot, d);
+    speak(id, line.text ?? line.event, line.priority, slot, d);
   }
 }
 
@@ -369,6 +404,26 @@ export function greetPick(id: string, desk: string): AimPick {
     const focus: Focus = { id: `greet-${id}`, label: `Say hi to ${name} 👋 · aim at the desk ${desk}`, action: { kind: 'greet', agentId: id } };
     return focus;
   };
+}
+
+/**
+ * Someone on this floor says `text` now (a rival's trash talk, a friend's high five): bubble and babble, a bubble alone
+ * when chatter is off or nearer voices fill the floor. False when they're not drawn here.
+ */
+export function sayLine(id: string, text: string, seconds?: number): boolean {
+  const b = bodyState(id);
+  if (!b) return false;
+  if (getAudioPrefs().chatter === 'off' || useStore.getState().replaying) {
+    say(id, text, seconds ?? bubbleSeconds(text));
+    return true;
+  }
+  const mine = speakingSlot(id);
+  if (mine >= 0) cut(mine);
+  const d = distanceTo(b);
+  const slot = takeSlot(d);
+  if (slot < 0) say(id, text, seconds ?? bubbleSeconds(text));
+  else speak(id, text, 'event', slot, d, seconds);
+  return true;
 }
 
 // ---------- the component and the probe ----------

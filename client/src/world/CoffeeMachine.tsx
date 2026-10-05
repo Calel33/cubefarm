@@ -8,7 +8,7 @@ import { PLAYER, type Mug, type Slot } from './coffeeBreak';
 import { BREW, BREW_CUES, EMPTY, canPlace, cuesPassed, level, placeMug, pouring, pressButton, progress, takeMug, tick, type BrewState } from './coffee';
 import { useInteractable } from './interact';
 import { glow, toon } from './materials';
-import { MUG_SIZE, MugLook, Steam, mugColor } from './toys/mugLook';
+import { MUG_SIZE, MugLook, Steam, mugColor, mugDrink } from './toys/mugLook';
 import { MUG, stowMug } from './toys/mugs';
 import { Box, Cyl } from './Toon';
 
@@ -341,7 +341,7 @@ export function CoffeeMachine({ position }: { position: [number, number, number]
         <Box size={[0.2, SLOT.tray, 0.26]} position={[SLOT.x, SLOT.tray / 2, 0]} color="#6c757d" outline />
         {view.kind !== 'empty' && (
           <group position={[SLOT.x, SLOT.tray + MUG_SIZE.h / 2, 0]} rotation={ROT_HANDLE}>
-            <MugLook color={mugColor(view.mug.id)} sips={0} steam={false} />
+            <MugLook color={mugColor(view.mug.id)} drink={mugDrink(view.mug.id)} sips={0} steam={false} />
             {view.kind === 'ready' && <Steam y={MUG_SIZE.h / 2} sips={MUG.maxSips} />}
           </group>
         )}
