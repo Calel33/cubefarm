@@ -12,6 +12,7 @@ import {
   parseThemeParam,
   resolveTheme,
   themeSettings,
+  type ModThemeWindow,
   type ThemeSettings,
 } from './themes.ts';
 
@@ -193,5 +194,36 @@ describe('dueGreeting', () => {
     expect(dueGreeting(halloween, settings({ mode: 'off' }), 'Leon', [])).toBe(null);
     expect(dueGreeting(halloween, settings({ birthday: { month: 10, day: 30 } }), 'Leon', [])).toMatch(/^🎂 Happy birthday, Leon!/);
     expect(greetingLines('birthday', '')[0]).toMatch(/^🎂 Happy birthday!/);
+  });
+});
+
+describe("mods' themes", () => {
+  const diwali: ModThemeWindow = { key: 'mod:fest/diwali', dates: { from: '10-20', to: '10-26' }, greetings: ['🪔 Happy Diwali{name}!'] };
+  const newYear: ModThemeWindow = { key: 'mod:fest/hogmanay', dates: { from: '12-30', to: '01-02' }, greetings: [] };
+  const forcedOnly: ModThemeWindow = { key: 'mod:fest/party', dates: null, greetings: [] };
+  const mods = [diwali, newYear, forcedOnly];
+
+  it('puts a mod theme on by its dates, ahead of the holidays but not the birthday', () => {
+    expect(resolveTheme(at(2026, 10, 25), settings(), null, mods)).toEqual({ id: null, source: 'auto', mod: 'mod:fest/diwali' });
+    expect(resolveTheme(at(2026, 10, 25), settings({ birthday: { month: 10, day: 25 } }), null, mods)).toEqual({ id: 'birthday', source: 'auto' });
+    expect(resolveTheme(at(2027, 1, 2), settings(), null, mods).mod).toBe('mod:fest/hogmanay');
+    expect(resolveTheme(at(2027, 1, 3), settings(), null, mods).mod).toBeUndefined();
+    expect(resolveTheme(at(2026, 10, 28), settings(), null, mods)).toEqual({ id: 'halloween', source: 'auto' });
+  });
+
+  it('forces one on (from the settings or the URL), skips one switched off, and falls back to dates when it has gone', () => {
+    expect(resolveTheme(at(2026, 6, 1), settings({ mode: 'mod:fest/party' }), null, mods)).toEqual({ id: null, source: 'forced', mod: 'mod:fest/party' });
+    expect(resolveTheme(at(2026, 6, 1), settings(), 'mod:fest/party', mods)).toEqual({ id: null, source: 'url', mod: 'mod:fest/party' });
+    expect(resolveTheme(at(2026, 10, 25), settings({ disabled: ['mod:fest/diwali'] }), null, mods)).toEqual({ id: 'halloween', source: 'auto' });
+    expect(resolveTheme(at(2026, 10, 25), settings({ mode: 'mod:gone/theme' }), null, mods)).toEqual({ id: null, source: 'auto', mod: 'mod:fest/diwali' });
+  });
+
+  it('keeps mod keys in the settings and the URL, and greets with the mod theme', () => {
+    expect(themeSettings(DEFAULT_THEME_SETTINGS, { mode: 'mod:fest/party' }).mode).toBe('mod:fest/party');
+    expect(themeSettings(DEFAULT_THEME_SETTINGS, { mode: 'mod:../x' }).mode).toBe('auto');
+    expect(themeSettings(DEFAULT_THEME_SETTINGS, { disabled: ['easter', 'mod:fest/diwali', 'mod:fest/diwali', 'mod:Bad'] }).disabled).toEqual(['easter', 'mod:fest/diwali']);
+    expect(parseThemeParam('?theme=mod:fest/party')).toBe('mod:fest/party');
+    expect(dueGreeting(at(2026, 10, 25), settings(), 'Leon', [], mods)).toBe('🪔 Happy Diwali, Leon!');
+    expect(dueGreeting(at(2027, 1, 1), settings(), 'Leon', [], mods)).toBe(null); // a theme without greetings sends none
   });
 });
