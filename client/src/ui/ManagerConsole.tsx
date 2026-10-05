@@ -251,6 +251,26 @@ function FloorBrief({ repo }: { repo: RepoView }) {
   );
 }
 
+/** Company news (#268): print an edition now, open the Gazette, and start or stop the all-hands in the lobby. */
+function NewsButtons() {
+  const allHands = useStore((s) => s.news.allHands);
+  const writing = useStore((s) => s.news.writing);
+  const openOverlay = useStore((s) => s.openOverlay);
+  return (
+    <div className="row wrap">
+      <button className="btn btn-small" onClick={() => openOverlay({ kind: 'gazette' })}>
+        📰 Read the Gazette
+      </button>
+      <button className="btn btn-small" onClick={() => void attempt(() => api.newsGenerate('daily'))} disabled={!!writing} title="An edition of the last 24 hours, now">
+        🖨 {writing ? 'The CEO is writing…' : 'Print an edition'}
+      </button>
+      <button className="btn btn-small" onClick={() => void attempt(() => api.allHands(allHands ? 'stop' : 'start'))} title="Idle people gather in the lobby; the CEO presents the latest weekly edition">
+        📣 {allHands ? 'Stop the all-hands' : 'Start the all-hands'}
+      </button>
+    </div>
+  );
+}
+
 function CeoTab() {
   const ceo = useStore((s) => s.agents[CEO_ID]);
   const log = useStore((s) => s.logs[CEO_ID]) ?? [];
@@ -300,6 +320,7 @@ function CeoTab() {
           <div className="muted small">
             {info.nextReviewAt ? `Next company review around ${new Date(info.nextReviewAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} (skipped if nothing changed).` : 'Periodic reviews are off (Settings).'}
           </div>
+          <NewsButtons />
           <PromptPreview agent={ceo} />
           {ceo.terminal ? (
             <LiveTerminal agentId={ceo.id} className="ceo-term" />

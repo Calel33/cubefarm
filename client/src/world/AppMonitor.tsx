@@ -13,6 +13,8 @@ import { BLOOM } from './gfx/bloomMarks';
 import { AppScreenGlow } from './gfx/ScreenGlow';
 import { glow, mix } from './materials';
 import { Box } from './Toon';
+import { useAllHandsSlide } from './news/AllHands';
+import { drawSlide } from './news/drawNews';
 
 const PX = [1280, 720] as const;
 const BEZEL = '#2b2d42';
@@ -102,11 +104,13 @@ export function AppMonitor({ repo, agents }: { repo: RepoView; agents: Agent[] }
   }, [live, latest, channel, qaShot]);
 
   const use = useKeyName('interact');
+  // During the all-hands the floor watches the slides here (#268).
+  const slide = useAllHandsSlide();
   const tex = useCanvasTexture(
     PX[0],
     PX[1],
-    (ctx) => drawAppScreen(ctx, PX[0], PX[1], { floor: repo.floor, name, color: repo.color, preview: p, shot: shot?.img ?? null, shotCaption: shot?.caption ?? null, channels: chips, use }),
-    [repo.floor, name, repo.color, p.status, p.url, p.ref, p.commit, p.startedAt, p.error, shot, chipKey, use],
+    (ctx) => (slide ? drawSlide(ctx, PX[0], PX[1], slide) : drawAppScreen(ctx, PX[0], PX[1], { floor: repo.floor, name, color: repo.color, preview: p, shot: shot?.img ?? null, shotCaption: shot?.caption ?? null, channels: chips, use })),
+    [repo.floor, name, repo.color, p.status, p.url, p.ref, p.commit, p.startedAt, p.error, shot, chipKey, use, slide?.key],
   );
   const ref = useInteractable<THREE.Group>({ id: `app-${repo.id}`, label: channel == null ? 'Open the app' : `Open PR #${channel}`, action: { kind: 'app', repoId: repo.id, pr: channel } }, 6);
 

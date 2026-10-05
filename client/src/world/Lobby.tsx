@@ -18,6 +18,8 @@ import { glow, shade } from './materials';
 import { WallSign } from './OfficeFloor';
 import { Bookshelf, CoffeeCorner, Couch, CoffeeTable, GlassWall, Plant, Rug, WallClock } from './Props';
 import { LobbyRituals } from './Rituals';
+import { LobbyAllHands } from './news/AllHands';
+import { HeadlineStrip, Newspaper, Radio } from './news/NewsProps';
 import { Shell } from './Shell';
 import { TimeLapseScreen } from './TimeLapseScreen';
 import { Ball, Box, Cyl } from './Toon';
@@ -351,6 +353,11 @@ export function Lobby() {
           </mesh>
         </group>
       </group>
+      {/* company news (#268): the Gazette and the radio on the counter, today's headline along its front */}
+      <Newspaper where="reception" position={[RECEPTION.x - 1.25, 1.13, RECEPTION.z + 0.2]} rotationY={0.2} />
+      <Radio position={[RECEPTION.x + 1.2, 1.13, RECEPTION.z + 0.2]} />
+      <HeadlineStrip position={[RECEPTION.x, 0.6, RECEPTION.z + RECEPTION.d / 2 + 0.025]} width={RECEPTION.w - 0.4} />
+      <LobbyAllHands />
       <WallSign
         position={[3, 2.25, -HALF_D + 0.03]}
         rotationY={0}

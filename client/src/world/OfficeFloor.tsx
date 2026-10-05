@@ -25,6 +25,8 @@ import { Decorations } from './decor/Decorations';
 import { DeskStory, MvpSign } from './desk/DeskStory';
 import { CoffeeTable, Couch, Kitchenette, Plant, Rug, WallClock, WaterCooler } from './Props';
 import { OfficeRituals } from './Rituals';
+import { FloorAllHands } from './news/AllHands';
+import { Newspaper } from './news/NewsProps';
 import { PongTable } from './PongTable';
 import { Shell } from './Shell';
 import { Toys } from './toys';
@@ -112,6 +114,7 @@ export const OfficeFloor = memo(function OfficeFloor({ repo }: { repo: RepoView 
       <Toys floor="office" />
       <ErrandDirector floor="office" agents={agents} leavers={leavers} onGone={gone} repoId={repo.id} />
       <OfficeRituals repo={repo} agents={agents} />
+      <FloorAllHands agents={agents} />
       {leavers.map((a) => (
         <Leaver key={a.id} agent={a} />
       ))}
@@ -168,6 +171,8 @@ export const OfficeFloor = memo(function OfficeFloor({ repo }: { repo: RepoView 
       <Plant position={[HALF_W - 0.7, 0, HALF_D - 0.7]} scale={0.9} pot="#8338ec" />
       <Couch position={[-HALF_W + 0.9, 0, 6.5]} rotationY={-Math.PI / 2} color={shade(repo.color, -0.05)} />
       <CoffeeTable position={[-HALF_W + 2.6, 0, 6.5]} rotationY={Math.PI / 2} />
+      {/* the Gazette, at the table's north end, clear of Friday's pizza */}
+      <Newspaper where={`floor-${repo.floor}`} position={[-HALF_W + 2.6, 0.47, 6.5 - 0.42]} rotationY={Math.PI / 2 + 0.25} />
       <Kitchenette position={[HALF_W - 0.45, 0, 7]} />
       <WaterCooler position={[HALF_W - 0.5, 0, -9.5]} />
       <Jukebox x={JUKEBOX.officeX} floor={repo.floor} />
