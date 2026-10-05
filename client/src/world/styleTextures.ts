@@ -102,8 +102,8 @@ function carpet(ctx: CanvasRenderingContext2D, n: number, color: string) {
     ctx.fillStyle = shade(color, (r() - 0.5) * 0.12);
     ctx.fillRect(r() * n, r() * n, 2, 2);
   }
-  ctx.strokeStyle = shade(color, 0.12);
-  ctx.lineWidth = 3;
+  ctx.strokeStyle = shade(color, 0.05);
+  ctx.lineWidth = 2;
   const d = n / 4;
   for (let i = -4; i <= 8; i++) {
     ctx.beginPath();

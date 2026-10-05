@@ -255,14 +255,16 @@ function Neon() {
 
 // ---------- library ----------
 
-/** A wooden bookcase full of books. */
+/** A low wooden bookcase full of books, under the "ship it" sign's height. */
 function Bookcase({ x, w }: { x: number; w: number }) {
   const colors = ['#7b2d26', '#2f4f3a', '#b08d57', '#3d405b', '#8c5a3c', '#5a3d5c', '#a44a3f'];
   const n = Math.floor((w - 0.1) / 0.11);
   return (
     <group position={[x, 0, WALL_Z + 0.22]}>
-      <Box size={[w, 2.25, 0.42]} position={[0, 1.125, 0]} color="#5c3a21" outline />
-      {[0.3, 0.85, 1.4, 1.95].map((y, row) => (
+      <Box size={[w, 1.45, 0.42]} position={[0, 0.725, 0]} color="#5c3a21" outline />
+      <Ball r={0.13} position={[0, 1.6, 0]} color="#3d6b8c" outline />
+      <Cyl r={0.04} h={0.06} position={[0, 1.48, 0]} color="#d4af37" shadow={false} />
+      {[0.32, 0.77, 1.22].map((y, row) => (
         <group key={y}>
           <Box size={[w - 0.08, 0.03, 0.36]} position={[0, y - 0.2, 0.04]} color="#4a2e1c" shadow={false} />
           {Array.from({ length: n }, (_, i) => (
@@ -294,8 +296,8 @@ function Library({ desks }: { desks: DeskPlace[] }) {
       {CEILING_LIGHTS.filter(([x, , z]) => Math.abs(x) > 11 || z > 7).map(([x, , z]) => (
         <GreenLamp key={`${x},${z}`} x={x} z={z} />
       ))}
-      <Bookcase x={FX - 1.55} w={1.0} />
-      <Bookcase x={FX + 1.55} w={1.0} />
+      <Bookcase x={FX - 1.55} w={0.95} />
+      <Bookcase x={FX + 1.55} w={0.95} />
       {/* the fireplace: a stone surround, its fire glowing, a mantel under the "ship it" sign */}
       <group position={[FX, 0, WALL_Z + 0.22]}>
         <Box size={[1.9, 1.12, 0.44]} position={[0, 0.56, 0]} color="#8d7b68" outline />

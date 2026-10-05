@@ -137,7 +137,11 @@ Client (`client/`, Vite root; React 19, R3F, drei, zustand):
   with Auto's governor, post-processing in a lazy chunk (`Effects.tsx`, `pipeline.ts`); a material blooms only if
   `bloomMarks.ts` marks it), the other people viewing the office (`presence/`: visitors, pings, the profile),
   holiday themes (`themes/`: which one is on from `shared/themes.ts`, their data and decoration slots in `themes.ts`
-  and `layout.ts`, each theme's scene in one lazy chunk loaded only while a theme is on; `?theme=` and `?date=` for QA).
+  and `layout.ts`, each theme's scene in one lazy chunk loaded only while a theme is on; `?theme=` and `?date=` for QA),
+  floor makeovers (each floor's style and layout from `shared/floorLook.ts`: desk layouts round named anchors in
+  `layout.ts`, which places everything by desk slot for the floor on screen (`setOfficeLook`); styles as data in
+  `floorStyles.ts`, drawn by `Shell.tsx` and `StyleDressing.tsx`; `floorLook.ts` for `?style=` / `?layout=` and desk
+  moves, `__swarmFloorStyle` in `floorStyleProbe.ts`).
 - `src/ui/`: HTML overlays: HUD, terminal (`LiveTerminal.tsx`: xterm.js on `/ws/term`), Kanban, manager's console,
   phone (with its mini-games in `games/`: pure logic in `tetris.ts` / `snake.ts` / `pet.ts`), elevator panel, app
   viewer, sounds (`sfx.ts`), key bindings (`keymap.ts`, pure; `controls.ts` keeps the player's own, and every

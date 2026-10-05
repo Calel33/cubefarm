@@ -102,8 +102,8 @@ export const STYLE_LOOKS: Record<FloorStyle, StyleLook> = {
     tint: ['#ff5ecb', '#3a2fff', 0.35],
     accentTrim: false,
     trim: '#ff3fbf',
-    rug: '#312654',
-    rugMix: 0.6,
+    rug: '#2b2150',
+    rugMix: 0.85,
     surface: STYLE_FLOOR.neon,
   },
   greenhouse: {
@@ -112,7 +112,7 @@ export const STYLE_LOOKS: Record<FloorStyle, StyleLook> = {
     wallDetail: '#e8f1e4',
     floor: '#c98b62',
     floorPattern: 'tiles',
-    ceiling: '#dfeee6',
+    ceiling: '#bfe6f5', // sky through the glass roof
     lamp: '#f6fff0',
     pendants: false,
     gloss: false,
@@ -136,8 +136,8 @@ export const STYLE_LOOKS: Record<FloorStyle, StyleLook> = {
     tint: ['#ffe0a6', '#5a3622', 0.25],
     accentTrim: false,
     trim: '#4a2e1c',
-    rug: '#8a3b36',
-    rugMix: 0.7,
+    rug: '#2f4f3a',
+    rugMix: 0.85,
     surface: STYLE_FLOOR.library,
   },
 };
