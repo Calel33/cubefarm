@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BALCONY_OUT, HALF_W, SIDE_OPENINGS } from '../world/layout';
+import { BALCONY_OUT, HALF_D, HALF_W, SIDE_OPENINGS } from '../world/layout';
 import {
   birdCall,
   BIRD_CALL_MAX,
@@ -44,6 +44,19 @@ describe('outsideHearing', () => {
     }
     expect(outsideHearing('office', BALCONY_OUT - 0.3, -9, SHUT).level).toBe(1);
     expect(outsideHearing('lobby', -(HALF_W + 2), 8, SHUT).level).toBe(1);
+  });
+
+  it('is full and clear out on the plaza round the lobby, past the patios and behind the elevator', () => {
+    for (const [x, z] of [
+      [-24, 4.5],
+      [0, -20],
+      [-20, -20],
+      [0, HALF_D + 6],
+      [25, 15],
+    ])
+      expect(outsideHearing('lobby', x, z, SHUT)).toEqual({ level: 1, clarity: 1, from: null });
+    // but not in the elevator's cabin
+    expect(outsideHearing('lobby', 0, HALF_D + 1.2, SHUT).level).toBe(LEAK);
   });
 
   it('is almost silent and fully muffled deep inside the office', () => {

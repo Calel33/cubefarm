@@ -5,6 +5,15 @@ import { BITE, LAST_BITE, biteFor, cuesDue, eAction, lift } from './sip';
 
 const sausage = (bites: number) => ({ kind: 'sausage', id: 'sausage-1', bites, charred: false });
 
+describe('eating lunch from the food truck', () => {
+  it('takes a bite on E like the sausage, and acts on the target once it is gone', () => {
+    const food = (bites: number) => ({ kind: 'food', id: 'food-1', dish: 'taco', bites });
+    expect(eAction(food(3), 'street')).toBe('sip');
+    expect(eAction(food(0), 'street')).toBe('target');
+    expect(eAction(food(0), null)).toBe('empty');
+  });
+});
+
 describe('eating a sausage', () => {
   it('takes a bite on E, whatever the crosshair is on (the grill included)', () => {
     expect(eAction(sausage(3), null)).toBe('sip');

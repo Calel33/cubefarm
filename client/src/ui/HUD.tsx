@@ -178,7 +178,7 @@ export function HUD() {
       {started && !overlay && onFoot && (focus || sip) && (
         <div className="hud-hint">
           <Key action="interact" /> {!held && <>/ <kbd>Click</kbd> </>}
-          {sip ? (held?.kind === 'sausage' ? 'Take a bite' : 'Sip coffee') : (dropLabel ?? focus?.label)}
+          {sip ? (held?.kind === 'sausage' || held?.kind === 'food' ? 'Take a bite' : 'Sip coffee') : (dropLabel ?? focus?.label)}
           {!held && focus?.action.kind === 'card' && focus.action.peel && (
             <>
               {' '}

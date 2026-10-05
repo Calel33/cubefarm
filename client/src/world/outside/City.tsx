@@ -10,6 +10,7 @@ import { viewElevation } from '../layout';
 import { hazeRange, weatherSky } from '../weather/weatherRules';
 import { weather } from '../weather/weatherState';
 import { carPose, carRoutes, CITY, cityLayout, CORRIDOR_HALF, MAX_CARS, waterTowers, type CityBox } from './cityLayout';
+import { BUS_ROUTE, busPose, type BusRun } from '../street/bus';
 
 // The city around the building (cityLayout.ts says where everything is). Six draw calls: the buildings (one
 // InstancedMesh with a shared window texture), roof bits as instanced boxes, cylinders and cones, the ground
@@ -19,7 +20,8 @@ import { carPose, carRoutes, CITY, cityLayout, CORRIDOR_HALF, MAX_CARS, waterTow
 // evening costs nothing. Drawn after the office (renderOrder 1), so indoors the walls hide it before it shades.
 // The weather (weather/) greys its light, darkens it in the rain, settles snow on everything facing up, pulls the haze
 // in with fog, flashes with lightning and sways the park's trees in a gale; a world event can knock a water tower
-// over (setTowerDown). window.__swarmCity reports what's there, for QA.
+// over (setTowerDown). One bus stops at the stop on the lobby's plaza now and then (street/bus.ts). window.__swarmCity
+// reports what's there, for QA.
 
 /** The shared uniforms every city material reads; the useFrame below changes them, never React. */
 const shared = {
@@ -464,6 +466,7 @@ function buildCity() {
 // ---------- the component ----------
 
 const pose = { x: 0, z: 0, yaw: 0 };
+const busRunNow: BusRun = { s: 0, stage: 'driving', next: 0, at: 0 };
 const carMatrix = new THREE.Matrix4();
 let lastT = -1;
 let lastWeather = -1;
@@ -524,7 +527,8 @@ export function City() {
     const { traffic, routes, scales, cars } = city;
     for (let i = 0; i < routes.length; i++) {
       const r = routes[i];
-      carPose(r, time, pose);
+      if (i === BUS_ROUTE) busPose(r, time, busRunNow, pose);
+      else carPose(r, time, pose);
       carMatrix.makeRotationY(pose.yaw).scale(scales[i]).setPosition(pose.x, 0, pose.z);
       traffic.setMatrixAt(i, carMatrix);
       const hx = Math.sin(pose.yaw);

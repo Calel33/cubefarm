@@ -3,7 +3,7 @@
 // layers the time of day brings (birds by day, the city at dusk, crickets at night, more wind on the roof), how often its
 // bursts may come, and the shape of each bird call and cricket phrase. outsideSfx.ts plays them.
 
-import { BALCONY, HALF_D, HALF_W, SIDE_OPENINGS, SIDES, WALL_T, sideSign, type Side } from '../world/layout';
+import { BALCONY, ELEVATOR, HALF_D, HALF_W, SIDE_OPENINGS, SIDES, WALL_T, sideSign, type Side } from '../world/layout';
 import { nightFactor } from '../world/sky/time';
 
 type FloorKind = 'office' | 'lobby' | 'roof';
@@ -35,6 +35,12 @@ export const ROOF_WIND = 1.6;
 
 const BALCONY_IN = HALF_W + WALL_T;
 
+/** Out of the building altogether, on the lobby's plaza (street/): past its walls, but not in the elevator's cabin. */
+export function outOnPlaza(x: number, z: number) {
+  if (Math.abs(x) < ELEVATOR.cabinHalf + 0.4 && z > HALF_D && z < HALF_D + ELEVATOR.depth + 0.6) return false;
+  return Math.abs(x) > BALCONY_IN + 0.6 || Math.abs(z) > HALF_D + WALL_T + 0.6;
+}
+
 export interface OutsideHearing {
   /** 0-1 gain on the whole ambience. */
   level: number;
@@ -55,6 +61,8 @@ export interface OutsideHearing {
 export function outsideHearing(kind: FloorKind, x: number, z: number, open: Readonly<Record<Side, number>>): OutsideHearing {
   // The roof is all outside, but for the elevator cabin, where it comes in through the doorway.
   if (kind === 'roof') return z > HALF_D ? { level: DOOR_LEVEL, clarity: DOOR_CLARITY, from: { x: 0, z: HALF_D } } : { level: 1, clarity: 1, from: null };
+  // out on the plaza in front of the lobby, it's all around you
+  if (kind === 'lobby' && outOnPlaza(x, z)) return { level: 1, clarity: 1, from: null };
   let level = LEAK;
   let clarity = 0;
   let from: OutsideHearing['from'] = null;

@@ -21,16 +21,16 @@ export type Zone = 'floor' | 'cabin' | Side | 'manager' | 'ceo';
 const inRect = (r: Pick<Rect, 'minX' | 'maxX' | 'minZ' | 'maxZ'>, x: number, z: number, grow = 0) => x >= r.minX - grow && x <= r.maxX + grow && z >= r.minZ - grow && z <= r.maxZ + grow;
 
 /** Past the elevator doorway, inside the cabin. */
-const inCabin = (x: number, z: number) => z > HALF_D + 0.2 && Math.abs(x) < ELEVATOR.cabinHalf + 0.3;
-/** Past the middle of a side wall: out on a balcony (or the patio). */
-const outside = (x: number) => Math.abs(x) > HALF_W + WALL_T / 2;
+const inCabin = (x: number, z: number) => z > HALF_D + 0.2 && z < HALF_D + ELEVATOR.depth + 0.4 && Math.abs(x) < ELEVATOR.cabinHalf + 0.3;
+/** Past the middle of an outer wall: out on a balcony (or the patio), or on the plaza round the lobby (street/). */
+const outside = (x: number, z = 0) => Math.abs(x) > HALF_W + WALL_T / 2 || Math.abs(z) > HALF_D + WALL_T / 2;
 /** The kitchenette: the east wall's corner past the side door, by the counter and fridge. */
 const KITCHEN = { minX: HALF_W - 3.4, maxX: HALF_W, minZ: 4.5, maxZ: HALF_D };
 
 /** The kind of space at (x, z) on a floor of `kind`. The lobby's glass offices are carpeted like an office floor. */
 export function roomAt(kind: FloorKind, x: number, z: number): Room {
   if (inCabin(x, z)) return 'cabin';
-  if (outside(x) || kind === 'roof') return 'outside';
+  if (outside(x, z) || kind === 'roof') return 'outside';
   if (kind === 'lobby') return inRect(MANAGER_ROOM, x, z) || inRect(CEO_ROOM, x, z) ? 'office' : 'lobby';
   if (inRect(KITCHEN, x, z)) return 'kitchen';
   if (inRect(QA_RUG, x, z, 0.8)) return 'qa';
@@ -41,7 +41,7 @@ export function roomAt(kind: FloorKind, x: number, z: number): Room {
 export function zoneAt(kind: FloorKind, x: number, z: number): Zone {
   if (inCabin(x, z)) return 'cabin';
   if (kind === 'roof') return 'floor'; // the whole deck is one open space
-  if (outside(x)) return x < 0 ? 'west' : 'east';
+  if (outside(x, z)) return x < 0 ? 'west' : 'east';
   if (kind === 'lobby' && inRect(MANAGER_ROOM, x, z)) return 'manager';
   if (kind === 'lobby' && inRect(CEO_ROOM, x, z)) return 'ceo';
   return 'floor';

@@ -296,7 +296,8 @@ export function freeSpot<T extends Spot>(spots: readonly T[], taken: ReadonlySet
 
 // ---------- food ----------
 
-export type Food = 'lunchbox' | 'sandwich' | 'noodles' | 'pizza';
+/** What's in someone's hand: a packed lunch, Friday's pizza, or lunch from the street's food truck (street/). */
+export type Food = 'lunchbox' | 'sandwich' | 'noodles' | 'pizza' | 'taco' | 'bao' | 'gelato';
 const LUNCHES: readonly Food[] = ['lunchbox', 'sandwich', 'noodles'];
 
 /** What someone has for lunch: the same every day (by their id). */

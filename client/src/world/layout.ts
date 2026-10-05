@@ -110,11 +110,11 @@ export function balconyFurniture(kind: FloorKind, side: Side): { planters: Rect[
   };
 }
 
-/** Both balconies' railings, planters and benches. */
+/** Both balconies' railings, planters and benches. The lobby's patios have no railing: they open onto the plaza (street/). */
 export function outsideColliders(kind: FloorKind): Rect[] {
   return SIDES.flatMap((side) => {
     const { planters, bench } = balconyFurniture(kind, side);
-    return [...balconyRailing(side), ...planters, bench];
+    return [...(kind === 'lobby' ? [] : balconyRailing(side)), ...planters, bench];
   });
 }
 
@@ -566,9 +566,9 @@ const LOBBY_RUGS: Rect[] = [LOBBY_RUG, MANAGER_ROOM, CEO_ROOM];
  * outside, a balcony's (or the patio's) paving sounds like the lobby's tiles. On the roof, the decking is wood and
  * the rest is paving. */
 export function surfaceAt(floor: 'office' | 'lobby' | 'roof', x: number, z: number): Surface {
-  if (z > HALF_D && Math.abs(x) <= ELEVATOR.cabinHalf) return 'cabin';
+  if (z > HALF_D && z < HALF_D + ELEVATOR.depth + SHELL_T && Math.abs(x) <= ELEVATOR.cabinHalf) return 'cabin';
   if (floor === 'roof') return x >= DECKING.minX && x <= DECKING.maxX && z >= DECKING.minZ && z <= DECKING.maxZ ? 'wood' : 'lobby';
-  if (Math.abs(x) > HALF_W) return 'lobby';
+  if (Math.abs(x) > HALF_W || Math.abs(z) > HALF_D) return 'lobby';
   for (const r of floor === 'lobby' ? LOBBY_RUGS : OFFICE_RUGS) {
     if (x >= r.minX && x <= r.maxX && z >= r.minZ && z <= r.maxZ) return 'rug';
   }

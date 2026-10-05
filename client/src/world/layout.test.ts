@@ -296,7 +296,11 @@ describe('outside: side doors, windows and balconies', () => {
       const railing = { x: s * (BALCONY_OUT - BALCONY.railT - PLAYER_RADIUS - 0.01), z };
       expect(walk(inside, railing, rects), `${kind} ${side} out`).toEqual(railing);
       expect(walk(railing, inside, rects), `${kind} ${side} back`).toEqual(inside);
-      // but no further: the railing stops you
+      // but no further on an office floor: the railing stops you (the lobby's patio opens onto the plaza)
+      if (kind === 'lobby') {
+        expect(s * walk(railing, { x: s * (BALCONY_OUT + 2), z }, rects).x).toBeCloseTo(BALCONY_OUT + 2);
+        continue;
+      }
       expect(s * walk(railing, { x: s * (BALCONY_OUT + 2), z }, rects).x).toBeCloseTo(BALCONY_OUT - BALCONY.railT - PLAYER_RADIUS);
       // and you can walk along the balcony, past its bench and planters, to either end
       const along = s * (BALCONY_OUT - BALCONY.railT - PLANTER.w - PLAYER_RADIUS - 0.05);
@@ -343,7 +347,7 @@ describe('outside: side doors, windows and balconies', () => {
         expect(Math.min(Math.abs(f.minZ - door), Math.abs(f.maxZ - door)), `${kind} ${side}`).toBeGreaterThan(SIDE_DOOR.half + 1.5);
       }
       expect((s * (bench.minX + bench.maxX)) / 2).toBeLessThan(HALF_W + WALL_T + BENCH.w); // its back to the wall
-      expect(outsideColliders(kind)).toEqual(expect.arrayContaining([...rail, ...planters, bench]));
+      expect(outsideColliders(kind)).toEqual(expect.arrayContaining([...(kind === 'office' ? rail : []), ...planters, bench]));
     }
     expect(all(kind)).toEqual(expect.arrayContaining(outsideColliders(kind)));
   });

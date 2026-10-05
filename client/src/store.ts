@@ -18,6 +18,7 @@ import { takeEmote, takePing, takePose, takeRoster } from './world/presence/pres
 import { gongForMerge } from './world/gongRunner';
 import { ROOF } from './world/layout';
 import { emitReward } from './world/decor/rewards';
+import type { Dish } from './world/street/streetRules';
 
 export type Agent = Omit<AgentView, 'log'>;
 
@@ -59,6 +60,8 @@ export interface Focus {
     | { kind: 'channel'; repoId: string; pr: number | null }
     | { kind: 'resume' }
     | { kind: 'roof'; op: string }
+    /** E on the street's things outside the lobby (street/streetState.ts): the food truck, the tree, the newsstand. */
+    | { kind: 'street'; op: string }
     | { kind: 'decoration'; op: 'place' | 'take' | 'box' | 'arcade'; slot?: string }
     | { kind: 'trophy'; id: string }
     /** Say hi to someone with nothing to do (Chatter.tsx). */
@@ -80,6 +83,8 @@ export type Held =
   | { kind: 'sticky'; id: string; repoId: string; key: string; number: number; pr: boolean }
   /** A sausage in a bun off the roof's grill: bites left, eaten like coffee is sipped. */
   | { kind: 'sausage'; id: string; bites: number; charred: boolean }
+  /** Lunch from the food truck outside the lobby (street/): bites left, eaten like the sausage. */
+  | { kind: 'food'; id: string; dish: Dish; bites: number }
   /** A decoration on its way to a slot (#210): from the floor's decor box (from null) or from the slot it stood in. */
   | { kind: 'decor'; id: string; item: DecorItem; from: string | null }
   /** A ping-pong paddle, playing at that end of the table (toys/pongState.ts): mouse and camera belong to the match. */

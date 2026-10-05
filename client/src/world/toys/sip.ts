@@ -11,7 +11,7 @@ export type EAction = 'sip' | 'empty' | 'target';
  * under the spout or presses the button). With an empty mug E acts on the target as usual, or hints when there is none.
  */
 export function eAction(held: { kind: string; sips?: number; bites?: number } | null, focusKind: string | null): EAction {
-  if (held?.kind === 'sausage') return (held.bites ?? 0) > 0 ? 'sip' : focusKind ? 'target' : 'empty';
+  if (held?.kind === 'sausage' || held?.kind === 'food') return (held.bites ?? 0) > 0 ? 'sip' : focusKind ? 'target' : 'empty';
   if (held?.kind !== 'mug' || focusKind === 'coffee') return 'target';
   if ((held.sips ?? 0) > 0) return 'sip';
   return focusKind ? 'target' : 'empty';

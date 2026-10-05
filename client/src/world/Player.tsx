@@ -33,6 +33,8 @@ import { lookCurve, pad, padName, pollPad, wasPressed, wasReleased, watchPads } 
 import { arriveOnFloor, cameraMode, exitView, homeSpot, lookAllowed, playerAt, rigInput, rigOwnsCamera, rotateView, setHomeLook, stepRig, tapView } from './camera/rig';
 import { leavePerch, perch, takePerchTurn, type Perch } from './perch';
 import { roofAction } from './roof/roofState';
+import { inPark } from './street/plaza';
+import { setPlayerPlacer, streetAction } from './street/streetState';
 import { greet } from './Chatter';
 import { joinPong, pongCamera, pongMouse, tickPaddle } from './toys/pongState';
 
@@ -116,6 +118,10 @@ export function runFocusAction(focus: Focus, via: 'key' | 'click' = 'key') {
   }
   if (focus.action.kind === 'roof') {
     roofAction(focus.action.op);
+    return;
+  }
+  if (focus.action.kind === 'street') {
+    streetAction(focus.action.op);
     return;
   }
   if (focus.action.kind === 'channel') {
@@ -228,6 +234,15 @@ export function Player({ colliders, floor }: { colliders: Rect[]; floor: number 
     arriveOnFloor({ x: camera.position.x, z: camera.position.z, ...look.current }); // a view carries on from here
   }, [floor, camera]);
   const lastSave = useRef(0);
+
+  // The street's probe (__swarmStreet.stand) stands you somewhere, for QA and screenshots.
+  useEffect(() => {
+    setPlayerPlacer((x, z, yaw, pitch) => {
+      camera.position.set(x, EYE_HEIGHT, z);
+      look.current = { yaw, pitch };
+    });
+    return () => setPlayerPlacer(null);
+  }, [camera]);
 
   useEffect(() => {
     if (!import.meta.env.DEV) return;
@@ -522,7 +537,9 @@ export function Player({ colliders, floor }: { colliders: Rect[]; floor: number 
       p.yaw = yaw;
       p.pitch = pitch;
     } else camera.position.y = EYE_HEIGHT + (moving && comfort.headBob ? Math.sin(bob.current) * 0.035 : 0);
-    footstepsFollow(bob.current, moving, speed > 5, surfaceAt(floor === ROOF ? 'roof' : floor === 0 ? 'lobby' : 'office', camera.position.x, camera.position.z));
+    // out in the lobby's pocket park the grass is soft underfoot, like a rug
+    const grass = floor === 0 && inPark(camera.position.x, camera.position.z);
+    footstepsFollow(bob.current, moving, speed > 5, grass ? 'rug' : surfaceAt(floor === ROOF ? 'roof' : floor === 0 ? 'lobby' : 'office', camera.position.x, camera.position.z));
     camera.rotation.set(pitch + (p?.tilt ?? 0) + (comfort.cameraShake ? sipPose.head : 0), yaw, 0, 'YXZ');
     playerAt.x = camera.position.x;
     playerAt.z = camera.position.z;

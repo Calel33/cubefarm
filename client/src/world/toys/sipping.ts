@@ -43,6 +43,22 @@ const sounds: Record<SipCue, (pos?: Vec3) => void> = {
   drop: () => undefined,
 };
 
+/** A bite of the food truck's lunch (street/) sounds of what it is: a crunchy taco shell, a soft bao, a lick of gelato. */
+const BITE_SOUNDS: Record<string, () => void> = {
+  taco: () => {
+    for (let i = 0; i < 2; i++) noise({ ...TOYS, name: 'taco-crunch', at: i * 0.05, dur: 0.06, peak: 0.06, filter: 'bandpass', freq: 3200 + Math.random() * 1400, q: 1.6, attack: 0.002 });
+    tone({ ...TOYS, name: 'taco-crunch', freq: 170, to: 100, dur: 0.07, peak: 0.04, attack: 0.004 });
+  },
+  bao: () => {
+    noise({ ...TOYS, name: 'bao-bite', dur: 0.12, peak: 0.045, filter: 'lowpass', freq: 900 + Math.random() * 300, to: 500, attack: 0.008 });
+    tone({ ...TOYS, name: 'bao-bite', freq: 140, to: 95, dur: 0.09, peak: 0.035, attack: 0.006 });
+  },
+  gelato: () => {
+    noise({ ...TOYS, name: 'gelato-lick', dur: 0.22, peak: 0.03, filter: 'bandpass', freq: 1800, to: 900, q: 2.2, attack: 0.03 });
+    tone({ ...TOYS, name: 'gelato-lick', freq: 520 + Math.random() * 60, to: 430, type: 'triangle', dur: 0.14, peak: 0.012, attack: 0.02 });
+  },
+};
+
 /** A dropped mug landing: a short ceramic clunk at `pos`, `peak` loud (from sip.ts's clunkPeak). */
 export function clunk(pos: Vec3, peak: number) {
   tone({ ...TOYS, pos, name: 'mug-clunk', freq: 1150, to: 880, type: 'triangle', dur: 0.08, peak: peak * 0.6, attack: 0.002 });
@@ -57,7 +73,7 @@ export const slurpAt = (pos: Vec3) => sounds.slurp(pos);
 export function sipCoffee(now = performance.now()): boolean {
   const held = useStore.getState().held;
   if (sip || !held) return false;
-  const plan = held.kind === 'mug' ? planFor(held.sips) : held.kind === 'sausage' ? biteFor(held.bites) : null;
+  const plan = held.kind === 'mug' ? planFor(held.sips) : held.kind === 'sausage' || held.kind === 'food' ? biteFor(held.bites) : null;
   if (!plan) return false;
   sip = { plan, mugId: held.id, start: now, next: 0 };
   return true;
@@ -77,9 +93,10 @@ export function tickSip(now = performance.now()) {
   const to = cuesDue(plan, sip.next, t);
   for (let i = sip.next; i < to; i++) {
     const cue = plan.cues[i].cue;
-    sounds[cue]();
     const held = useStore.getState().held;
-    if (held?.kind === 'sausage') {
+    if (cue === 'chomp' && held?.kind === 'food') BITE_SOUNDS[held.dish]?.();
+    else sounds[cue]();
+    if (held?.kind === 'sausage' || held?.kind === 'food') {
       if (cue === 'drink') s.setHeld({ ...held, bites: Math.max(0, held.bites - 1) });
       if (cue === 'drop') {
         endSip();

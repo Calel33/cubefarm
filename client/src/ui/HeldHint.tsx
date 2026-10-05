@@ -5,6 +5,7 @@ import { BlasterHud } from './BlasterHud';
 import { decorName } from '../world/decor/actions';
 import { Key } from './Key';
 import { PongHud } from './PongHud';
+import { MENU } from '../world/street/streetRules';
 
 /** The throw meter under the crosshair. Animates itself while charging; hidden during the first moments of a tap. */
 function ChargeMeter({ at }: { at: number }) {
@@ -39,6 +40,14 @@ export function HeldHint() {
     return (
       <div className="hud-hint hud-held">
         🌭 {held.bites} {held.bites === 1 ? 'bite' : 'bites'} left{held.charred ? ' (a bit charred)' : ''} · <Key action="interact" /> eat · <Key action="drop" /> drop
+      </div>
+    );
+  }
+  if (held.kind === 'food') {
+    const dish = MENU[held.dish];
+    return (
+      <div className="hud-hint hud-held">
+        {dish.emoji} {dish.name}: {held.bites} {held.bites === 1 ? 'bite' : 'bites'} left · <Key action="interact" /> eat · <Key action="drop" /> drop
       </div>
     );
   }

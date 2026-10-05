@@ -33,6 +33,13 @@ describe('roomAt', () => {
     expect(roomAt('lobby', -HALF_W - 1, 4)).toBe('outside');
   });
 
+  it('counts the plaza round the lobby as outside, behind the elevator too', () => {
+    expect(roomAt('lobby', 0, -20)).toBe('outside');
+    expect(roomAt('lobby', 0, HALF_D + 8)).toBe('outside');
+    expect(roomAt('lobby', -24, 20)).toBe('outside');
+    expect(roomAt('lobby', 0, HALF_D + 1.3)).toBe('cabin');
+  });
+
   it('counts the elevator doorway as the floor, the cabin as past it', () => {
     expect(roomAt('office', 0, HALF_D + 0.1)).toBe('office');
     expect(roomAt('office', ELEVATOR.cabinHalf - 0.3, HALF_D + 2)).toBe('cabin');

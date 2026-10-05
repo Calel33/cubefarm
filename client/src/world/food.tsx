@@ -1,5 +1,6 @@
 // The rituals' food (Rituals.tsx): a lunch box, a sandwich or noodles in a cup at lunch, and Friday's pizza, in
-// someone's hand (Character.tsx), beside a busy developer's keyboard, and in the courier's boxes. Small toon shapes.
+// someone's hand (Character.tsx), beside a busy developer's keyboard, and in the courier's boxes; and the food truck's
+// tacos, bao and gelato for the lunch crowd outside (street/LunchPeople.tsx). Small toon shapes.
 
 import { toon } from './materials';
 import type { Food } from './ritualSchedule';
@@ -50,6 +51,29 @@ export function FoodLook({ kind }: { kind: Food }) {
           <Cyl r={0.046} rTop={0.052} h={0.03} position={[0, -0.01, 0]} color="#e63946" shadow={false} />
           <Cyl r={0.006} h={0.2} position={[0.015, 0.1, 0]} rotation={[0, 0, 0.18]} color="#e9c46a" shadow={false} />
           <Cyl r={0.006} h={0.2} position={[-0.012, 0.1, 0.01]} rotation={[0.1, 0, 0.1]} color="#e9c46a" shadow={false} />
+        </group>
+      );
+    case 'taco':
+      return (
+        <group rotation={[0, 0, Math.PI / 2]}>
+          <Cyl r={0.07} h={0.11} color="#f2c14e" outline shadow={false} />
+          <Ball r={0.03} position={[0.03, 0.02, 0]} color="#80ed99" shadow={false} />
+          <Ball r={0.025} position={[0.03, -0.025, 0]} color="#c1121f" shadow={false} />
+        </group>
+      );
+    case 'bao':
+      return (
+        <group>
+          <Ball r={0.07} scale={[1, 0.6, 0.8]} color="#fdf6ec" outline shadow={false} />
+          <Box size={[0.1, 0.025, 0.06]} position={[0, 0, 0.02]} color="#9c4a2a" shadow={false} />
+        </group>
+      );
+    case 'gelato':
+      return (
+        <group>
+          <Cyl r={0.005} rTop={0.045} h={0.13} position={[0, -0.04, 0]} color="#d4a373" outline shadow={false} />
+          <Ball r={0.045} position={[0, 0.045, 0]} color="#b5e48c" shadow={false} />
+          <Ball r={0.038} position={[0.012, 0.095, 0]} color="#fefae0" shadow={false} />
         </group>
       );
     case 'pizza':

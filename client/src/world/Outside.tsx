@@ -14,6 +14,7 @@ import { bodyState } from './people';
 import { boxesGeometry, merged, type BoxSpec } from './shapes';
 import { paneMaterial } from './Shell';
 import { LampHalos, balconyBulb } from './sky/lamps';
+import { streetWalkers } from './street/streetState';
 
 // Outside the side walls: the sliding glass doors, the balconies (the lobby's is a patio on the ground), and the rest
 // of the building round you: its walls above and below your floor and every floor's balcony (the city, outside/City.tsx,
@@ -67,6 +68,8 @@ function SideDoors({ kind, floor }: { kind: FloorKind; floor: number }) {
       const b = bodyState(id);
       if (b) walkers.push(b);
     }
+    // and people out on the plaza heading in (street/): someone back from lunch, a passenger off the bus
+    for (const w of streetWalkers) walkers.push(w);
     tickDoors(playerAt.x, playerAt.z, Math.min(dt, 0.05), moved, walkers);
     for (const i of LEAVES) {
       const g = leaves.current[i];
@@ -113,7 +116,7 @@ function balconyGeometry(floor: number, top: number) {
     for (const side of SIDES) {
       const s = sideSign(side);
       (f === 0 ? patio : slabs).push({ size: [DEEP, slab, LEN], at: [s * (HALF_W + DEEP / 2), y - slab / 2, MID_Z] });
-      if (f > top) continue;
+      if (f > top || f === 0) continue; // the ground's patios open onto the plaza (street/): no railing
       const out = s * (BALCONY_OUT - railT / 2);
       const across = s * (IN + (depth - railT) / 2);
       const paneH = rail - 0.14;

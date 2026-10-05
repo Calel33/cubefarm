@@ -11,6 +11,7 @@ import { CameraRig } from './camera/CameraRig';
 import { Chatter } from './Chatter';
 import { CUT_PLANES } from './camera/rig';
 import { lobbyColliders, officeColliders, ROOF, roofColliders } from './layout';
+import { plazaColliders } from './street/plaza';
 import { decorRects } from './decor/decor';
 import { Graphics } from './gfx/Graphics';
 import { Lobby } from './Lobby';
@@ -34,6 +35,8 @@ import { WorldEvents } from './events/WorldEvents';
 // The roof is its own chunk: fetched as the elevator heads up there, never by a floor that doesn't go.
 const loadRoof = () => import('./roof/Roof');
 const Roof = lazy(loadRoof);
+// The street round the lobby (the plaza, the food truck, the park, the bus stop) is its own chunk, mounted in the lobby only.
+const Street = lazy(() => import('./street/Street'));
 // Photo mode's camera and drawing load the first time it's opened.
 const PhotoScene = lazy(() => import('../photo/PhotoScene'));
 
@@ -84,7 +87,7 @@ export function Game() {
     () =>
       onRoof
         ? roofColliders()
-        : [...(isOffice ? [...officeColliders(), ...decorRects(placed ?? {})] : lobbyColliders()), ...decorColliders(theme, isOffice ? 'office' : 'lobby')],
+        : [...(isOffice ? [...officeColliders(), ...decorRects(placed ?? {})] : [...lobbyColliders(), ...plazaColliders()]), ...decorColliders(theme, isOffice ? 'office' : 'lobby')],
     [onRoof, isOffice, placed, theme],
   );
   const toRoof = useStore((s) => s.travel?.to === ROOF);
@@ -122,6 +125,11 @@ export function Game() {
       {/* the floor's repeated parts (desks, chairs, props, people) are drawn as instanced batches (Batched.tsx) */}
       <Batches key={onRoof ? 'roof' : (repo?.id ?? 'lobby')}>
         <Suspense fallback={null}>{onRoof ? <Roof top={top} /> : repo ? <OfficeFloor key={repo.id} repo={repo} /> : <Lobby />}</Suspense>
+        {!onRoof && !repo && (
+          <Suspense fallback={null}>
+            <Street />
+          </Suspense>
+        )}
       </Batches>
       {!onRoof && <Outside key={isOffice ? floor : 0} kind={isOffice ? 'office' : 'lobby'} floor={isOffice ? floor : 0} top={top} />}
       <ThemeLayer key={onRoof ? ROOF : isOffice ? floor : 0} kind={onRoof ? 'roof' : isOffice ? 'office' : 'lobby'} floor={onRoof ? ROOF : isOffice ? floor : 0} top={top} repoId={repo?.id ?? null} />
