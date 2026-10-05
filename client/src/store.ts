@@ -5,6 +5,7 @@ import { latestListed } from '../../shared/watch';
 import { DEFAULT_WEATHER, DEFAULT_WORLD_EVENTS, EMPTY_WEATHER_VIEW, type WeatherView } from '../../shared/outside';
 import { DEFAULT_NOTIFY } from '../../shared/notify';
 import { speechText } from '../../shared/speech';
+import { emptyNews, type NewsView } from '../../shared/news';
 import { showDesktopNote } from './notifications';
 import { EMPTY_OPS, newAlarms } from './ops';
 import type { DecorItem, ProgressView } from '../../shared/progress';
@@ -38,7 +39,9 @@ export type Overlay =
   | { kind: 'catalogue'; repoId?: string } // the lobby kiosk (#210)
   | { kind: 'decor-box'; repoId: string } // a floor's decor box
   /** The floor as a list (Settings → Accessibility): who is there, their status and what they're doing. */
-  | { kind: 'floorList' };
+  | { kind: 'floorList' }
+  /** The Cubefarm Gazette (#268): an edition (default: the newest) and its back issues. */
+  | { kind: 'gazette'; id?: string };
 
 /** Help's tabs: how the office works, and the controls (keys, mouse, gamepad). */
 export type HelpTab = 'office' | 'controls';
@@ -66,7 +69,9 @@ export interface Focus {
     /** E on a holiday theme's thing (themes/active.ts). */
     | { kind: 'theme'; id: string }
     /** Pick up a paddle at that end of the ping-pong table (toys/pongState.ts). */
-    | { kind: 'pong'; end: 'west' | 'east' };
+    | { kind: 'pong'; end: 'west' | 'east' }
+    /** The radio on the reception desk: the morning bulletin, or stop it (#268). */
+    | { kind: 'radio' };
 }
 
 /** What the player is carrying. Other items (a blaster, say) join the union with their own kind. */
@@ -126,6 +131,7 @@ interface State {
   ticker: TickerItem[]; // the floors' recent activity lines, oldest first (world/ActivityTicker.tsx)
   notifyChannels: NotifyChannelsView; // which chat apps have a webhook saved (hints only) and how many devices get push
   pong: Record<string, PongRow[]>; // each floor's ping-pong leaderboard by repo id, best first
+  news: NewsView; // the Gazette's newest editions and the all-hands (#268)
   restarting: boolean; // the connection dropped because the office is restarting to update
   visitors: VisitorView[]; // everyone else appearing in the office, any floor (presence; their poses skip the store)
   replaying: boolean; // the time-lapse (replay.ts) is showing a recorded day: live events wait, live actions are off
@@ -251,6 +257,7 @@ export const useStore = create<State>((set, get) => ({
   ticker: [],
   notifyChannels: { webhooks: { discord: { set: false, hint: '' }, slack: { set: false, hint: '' }, telegram: { set: false, hint: '' }, ntfy: { set: false, hint: '' } }, pushDevices: 0 },
   pong: {},
+  news: emptyNews(),
   restarting: false,
   visitors: [],
   replaying: false,
@@ -319,6 +326,7 @@ export const useStore = create<State>((set, get) => ({
           notifyChannels: d.notifyChannels ?? get().notifyChannels,
           progress: d.progress ?? { floors: {}, achievements: [], coffees: 0, merges: 0 },
           pong: d.pong ?? {},
+          news: d.news ?? emptyNews(),
           restarting: false,
           floor: floorExists ? get().floor : 0,
         });
@@ -522,6 +530,9 @@ export const useStore = create<State>((set, get) => ({
         break;
       case 'reward':
         if (live) emitReward(ev.reward);
+        break;
+      case 'news':
+        set({ news: ev.news });
         break;
       case 'pong':
         set({ pong: { ...get().pong, [ev.repoId]: ev.board } });

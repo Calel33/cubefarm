@@ -15,7 +15,8 @@ export interface CeoJob {
   kind: CeoJobKind;
   repoId?: string; // onboard / plan / triage
   prNumber?: number; // triage: the stuck pull request
-  text?: string; // chat: the manager's message(s)
+  text?: string; // chat: the manager's message(s); news: the writing prompt
+  edition?: string; // news: the Gazette edition to rewrite
   at: number;
 }
 
@@ -277,6 +278,8 @@ export function ceoSystemPrompt(o: {
 
 export function ceoJobPrompt(job: CeoJob, floor: { floor: number; fullName: string; clone: string; mission: string; backlog: number } | null, pr?: TriagePr | null): string {
   switch (job.kind) {
+    case 'news':
+      return job.text ?? 'There is no edition to write. Reply "Nothing to do."';
     case 'triage':
       if (!floor || !pr) return `Pull request #${job.prNumber ?? '?'} no longer needs triage. Reply "Nothing to do."`;
       return [
@@ -347,6 +350,8 @@ export function jobLabel(job: CeoJob, floor: { floor: number; fullName: string }
       return 'Replying to you';
     case 'triage':
       return `Triaging PR #${job.prNumber ?? '?'} · ${where}`;
+    case 'news':
+      return 'Writing the Gazette';
   }
 }
 

@@ -207,6 +207,7 @@ export class Voice {
   private rejected = false; // ElevenLabs said 401: no more calls until the key changes
   private voicesCache: { at: number; list: VoiceOption[] } | null = null;
   private making = new Map<string, Promise<Buffer>>();
+  private made = 0; // clips synthesized since the start (the radio tells a fresh bulletin from a cached one)
   private queue: Promise<unknown> = Promise.resolve();
   private clips: ClipManifest = {};
   private cacheView: VoiceCacheView = { clips: 0, bytes: 0, saved: [] };
@@ -376,6 +377,18 @@ export class Voice {
     return this.audio('standup', s.voiceId, s.model, standupLine(count, part));
   }
 
+  /**
+   * GET /api/news/:id/bulletin: the radio's bulletin (#268), made once per edition's words and cached like the
+   * stand-up's line. `fresh`: this request made it (a replay never does).
+   */
+  async newsAudio(text: string): Promise<{ audio: Buffer; fresh: boolean }> {
+    const s = this.deps.settings();
+    if (s.provider !== 'elevenlabs') throw new HttpError(404, "The radio isn't voiced by ElevenLabs right now.");
+    const before = this.made;
+    const audio = await this.audio('news', s.voiceId, s.model, text);
+    return { audio, fresh: this.made !== before };
+  }
+
   private async audio(name: string, voiceId: string, model: string, text: string, m?: PhoneMessage): Promise<Buffer> {
     if (!VOICE_ID.test(voiceId)) throw new HttpError(400, 'Pick an ElevenLabs voice first.');
     // The voice, model and words are in the file name, so a new voice or a reused message id never plays stale audio.
@@ -408,6 +421,7 @@ export class Voice {
     const tmp = `${file}.${process.pid}.tmp`;
     await fs.writeFile(tmp, audio);
     await fs.rename(tmp, file);
+    this.made++;
     this.deps.log?.(`voice: made a new clip ${path.basename(file)} (${req.text.length} characters)`);
     if (m) await this.record(m, [path.basename(file)]);
     else await this.prune();

@@ -124,6 +124,7 @@ export class NewsDesk {
   private lastAllHands: number | null = null;
   private seq = 0;
   private prunedAt = 0;
+  private fresh = false; // no log on disk yet
   private saving: NodeJS.Timeout | null = null;
   private timer: NodeJS.Timeout | null = null;
   private ending: NodeJS.Timeout | null = null;
@@ -138,16 +139,13 @@ export class NewsDesk {
   async init() {
     await fs.mkdir(this.deps.dir, { recursive: true });
     const raw = await fs.readFile(this.logFile(), 'utf8').catch(() => '');
+    this.fresh = !raw;
     try {
       const parsed = (raw ? JSON.parse(raw) : {}) as Partial<LogFile>;
       this.items = Array.isArray(parsed.items) ? parsed.items.filter((i) => i && typeof i.at === 'number' && typeof i.kind === 'string') : [];
       this.lastAllHands = typeof parsed.lastAllHands === 'number' ? parsed.lastAllHands : null;
     } catch {
       this.items = [];
-    }
-    if (this.items.length === 0 && this.deps.seed) {
-      this.items = this.deps.seed(this.now());
-      this.saveSoon();
     }
     for (const name of await fs.readdir(this.deps.dir).catch(() => [] as string[])) {
       const id = name.replace(/\.json$/, '');
@@ -158,8 +156,13 @@ export class NewsDesk {
     await this.prune();
   }
 
-  /** Starts the minute check (7 am editions, Monday's all-hands) and runs it once now. */
+  /** Starts the minute check (7 am editions, Monday's all-hands) and runs it once now. A new demo log gets its made-up week first. */
   start() {
+    if (this.fresh && this.deps.seed) {
+      this.items = [...this.deps.seed(this.now()), ...this.items].slice(-LOG_MAX);
+      this.saveSoon();
+    }
+    this.fresh = false;
     this.timer = setInterval(() => void this.check(), CHECK_MS);
     this.timer.unref?.();
     void this.check();

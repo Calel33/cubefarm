@@ -14,6 +14,16 @@ import type { AgentTerminal } from './terminal.ts';
 import type { OpsHistory } from './metrics.ts';
 import type { UsageWarning } from './pacing.ts';
 import type { CliView, GhRepoSummary, IssueInfo, PullInfo } from '../shared/types.ts';
+import type { NewsItem } from '../shared/news.ts';
+
+/** A floor as the demo's made-up news needs it. */
+export interface DemoNewsFloor {
+  floor: number;
+  repoId: string;
+  repo: string;
+  devs: { id: string; name: string }[];
+  testers: { id: string; name: string }[];
+}
 
 /** A made-up candidate the demo CEO proposes: the propose_hire tool's arguments, bar the floor and role. */
 export interface DemoHire {
@@ -99,6 +109,8 @@ export interface Backend {
   notify: NotifyTransport;
   /** The demo only: a made-up past week for mission control, so a fresh demo office has numbers from the start. */
   seedOps?(repos: string[], now: number): OpsHistory;
+  /** The demo only: a made-up last week of news, so a fresh demo office has a Gazette from the start. */
+  seedNews?(floors: DemoNewsFloor[], now: number): NewsItem[];
   /** The demo only: how many developers and QA testers a fresh demo office hires on floor `floor`. */
   demoTeam?(floor: number): { dev: number; qa: number };
   /** The demo only: Claude's usage warning, or its limit, on demand, as a session would report it. */

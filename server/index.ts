@@ -261,6 +261,20 @@ app.get(
 );
 app.post('/api/journal/sample', route(() => swarm.journalSample()));
 
+// Company news (#268): the Gazette's editions (read), one printed on demand, the radio's bulletin and the all-hands.
+app.get('/api/news', route(() => swarm.news.list()));
+app.post('/api/news/generate', route((req) => swarm.news.generate(req.body?.kind)));
+app.post('/api/news/allhands', route((req) => swarm.allHands(req.body?.action)));
+app.get('/api/news/:id', route((req) => swarm.news.read(String(req.params.id))));
+app.get(
+  '/api/news/:id/bulletin',
+  route(async (req, res) => {
+    const { audio, fresh } = await swarm.newsBulletin(String(req.params.id));
+    res.setHeader('X-Clip-Fresh', fresh ? '1' : '0');
+    sendAudio(res, audio, 'no-store');
+  }),
+);
+
 // The CEO and the manager's phone
 app.post('/api/ceo/message', route((req) => swarm.messageCeo(str(req.body.text))));
 app.post('/api/ceo/review', route(() => swarm.requestReview()));

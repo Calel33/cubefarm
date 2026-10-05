@@ -2,7 +2,8 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import http from 'node:http';
 import path from 'node:path';
-import type { Backend, DemoHire } from './backend.ts';
+import type { Backend, DemoHire, DemoNewsFloor } from './backend.ts';
+import type { NewsItem } from '../shared/news.ts';
 import type { PreviewBackend } from './previewRunner.ts';
 import { describeOfficeTool, type LogEntry, type SessionCallbacks, type SessionHandle, type SessionOptions } from './agentRunner.ts';
 import { CLIS } from './clis.ts';
@@ -516,6 +517,53 @@ export function demoUsage(kind: 'warning' | 'limit', now: number): UsageWarning 
  * A believable past week for mission control: each floor merged a few PRs every working day (the first floor more),
  * most QA rounds and check runs passed, and sessions cost around a dollar. `rand` is there for the tests.
  */
+// ---------- the Gazette's made-up week (#268) ----------
+
+/** What each demo floor shipped last week, a theme apiece so the stories group the way real ones do. */
+const NEWS_TITLES = [
+  ['Weather: rain over the city', 'Weather: thunderstorms at night', 'Weather: a kaiju in the fog', 'Weather: snow on the balconies', 'Sound for the thunder'],
+  ['Dark mode for the settings page', 'Dark mode for the charts', 'Fix the login redirect loop', 'Keyboard shortcuts for search', 'Faster first load'],
+  ['Checkout: an Apple Pay button', 'Checkout: keep the cart after login', 'Checkout: coupon codes', 'Sharper product photos', 'Fix the price rounding'],
+  ['Offline sync for notes', 'Sync: a merge view for conflicts', 'Export notes as Markdown', 'Pin notes to the top', 'Tags with colours'],
+];
+const NEWS_ISSUES = ['Empty states for every list', 'A 404 page with a way home', 'Remember the last tab', 'Show a spinner while saving', 'Tidy the footer links'];
+
+/**
+ * The demo's last week of news, made up from its floors and people: a few merges a day per floor (more yesterday),
+ * QA rounds before them, issues filed, a hire, a trophy and a ping-pong game. Deterministic, so a fresh demo reads the same.
+ */
+export function demoNews(floors: DemoNewsFloor[], now: number): NewsItem[] {
+  const out: NewsItem[] = [];
+  const midnight = new Date(new Date(now).getFullYear(), new Date(now).getMonth(), new Date(now).getDate()).getTime();
+  let pr = 140;
+  floors.slice(0, 6).forEach((f, fi) => {
+    const titles = NEWS_TITLES[fi % NEWS_TITLES.length];
+    const where = { floor: f.floor, repoId: f.repoId, repo: f.repo };
+    for (let d = 7; d >= 1; d--) {
+      const day = midnight - d * DAY_MS;
+      const merges = d === 1 ? 3 - (fi % 2) : (d + fi) % 3;
+      for (let k = 0; k < merges; k++) {
+        const dev = f.devs[(d + k + fi) % Math.max(1, f.devs.length)];
+        const tester = f.testers[(d + k) % Math.max(1, f.testers.length)];
+        const title = titles[(d * 2 + k) % titles.length];
+        const at = day + (10 + k * 2) * HOUR_MS + fi * 7 * 60_000;
+        pr++;
+        if ((d + k + fi) % 4 === 0 && tester) out.push({ at: at - 3 * HOUR_MS, kind: 'qa', ...where, pr, pass: false, who: tester.name, whoId: tester.id, author: dev?.name });
+        if (tester) out.push({ at: at - HOUR_MS, kind: 'qa', ...where, pr, pass: true, who: tester.name, whoId: tester.id, author: dev?.name });
+        out.push({ at, kind: 'merged', ...where, pr, title, ...(dev ? { who: dev.name, whoId: dev.id } : {}) });
+        out.push({ at, kind: 'coins', ...where, pr, coins: 10 + ((pr * 7) % 15) });
+      }
+      if ((d + fi) % 2 === 0) out.push({ at: day + 9 * HOUR_MS, kind: 'filed', ...where, issue: 60 + d * 3 + fi, title: NEWS_ISSUES[(d + fi) % NEWS_ISSUES.length] });
+      if ((d + fi) % 3 === 0) out.push({ at: day + 16 * HOUR_MS, kind: 'closed', ...where, issue: 40 + d + fi, title: 'Old spike: try a chart library' });
+    }
+    if (fi === 0 && f.devs[0]) out.push({ at: midnight - 3 * DAY_MS + 11 * HOUR_MS, kind: 'hired', ...where, who: f.devs[f.devs.length - 1].name, whoId: f.devs[f.devs.length - 1].id, detail: 'Frontend Developer' });
+    if (fi === 1 && f.devs.length > 1) out.push({ at: midnight - DAY_MS + 13 * HOUR_MS, kind: 'pong', ...where, who: f.devs[0].name, whoId: f.devs[0].id, detail: `11–7 over ${f.devs[1].name}` });
+    if (fi === 2) out.push({ at: midnight - 2 * DAY_MS + 15 * HOUR_MS, kind: 'needs-human', ...where, pr: 133 });
+  });
+  out.push({ at: midnight - DAY_MS + 17 * HOUR_MS, kind: 'achievement', floor: null, detail: '🔥 On a roll', title: 'five merges in a day' });
+  return out.sort((a, b) => a.at - b.at);
+}
+
 export function demoPastWeek(repos: string[], now: number, rand: () => number = Math.random): OpsHistory {
   const h = emptyHistory();
   const min = 60_000;
@@ -775,6 +823,7 @@ export function createDemoBackend(scale: DemoScale | null = null): Backend {
     weather: demoWeather,
     notify: demoNotify,
     seedOps: (ids, at) => demoPastWeek(ids, at),
+    seedNews: (floors, at) => demoNews(floors, at),
     demoTeam: (floor) => demoTeam(scale, floor),
     simulateUsage: demoUsage,
     demoCandidate,
@@ -1187,6 +1236,18 @@ function ceoSession(opts: SessionOptions, cb: SessionCallbacks): SessionHandle {
       const prs = s.floors.reduce((n, f) => n + f.pullRequests.length, 0);
       return `All ${s.floors.length} floors look healthy: ${issues} open issues and ${prs} pull requests in flight. No changes needed.`;
     },
+    // The Gazette: the draft's words with a newsroom polish, as JSON like the real (cheap) session's answer.
+    async news(prompt: string) {
+      await think('Reading the draft edition.');
+      const facts = JSON.parse(prompt.slice(prompt.lastIndexOf('\n{') + 1)) as { headline: string; standfirst: string; stories: { headline: string; body: string }[]; mvp: { name: string; why: string } | null };
+      await step([{ kind: 'text', text: '● Polishing the headlines.' }], 1200);
+      return JSON.stringify({
+        headline: `Extra! ${facts.headline}`,
+        standfirst: facts.standfirst,
+        stories: facts.stories.map((s) => ({ headline: s.headline, body: s.body })),
+        mvpWhy: facts.mvp ? `${facts.mvp.why}, and a smile for everyone` : undefined,
+      });
+    },
     // A stuck PR: read what QA and GitHub say, then act through the real triage tools, as the real CEO would.
     async triage(floor: number, pr: number, facts: string) {
       await step([{ kind: 'tool', tool: 'Read', text: `⏺ Read PR #${pr}'s QA report` }, { kind: 'result', text: '  ⎿ Read 38 lines' }]);
@@ -1264,7 +1325,9 @@ function ceoSession(opts: SessionOptions, cb: SessionCallbacks): SessionHandle {
   const prompt = opts.prompt;
   const where = prompt.match(/[Ff]loor (\d+) \(([^,)]+)/);
   const triage = prompt.match(/^Triage: pull request #(\d+) on floor (\d+)/);
-  const run = triage
+  const run = /^Write the .* Gazette's (daily|weekly) edition/.test(prompt)
+    ? () => scripts.news(prompt)
+    : triage
     ? () => scripts.triage(Number(triage[2]), Number(triage[1]), prompt)
     : /no longer needs triage/.test(prompt)
       ? async () => 'Nothing to do.'

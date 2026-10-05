@@ -41,6 +41,8 @@ import { Ticker } from './ticker.ts';
 import { Outbox } from './outbox.ts';
 import { DEFAULT_LISTEN, DEFAULT_VOICE, listenSettings, speaks, Voice, voiceSettings } from './voice.ts';
 import { Notifier } from './notifier.ts';
+import { issueChanges, NewsDesk, newsFromLedger, type NewsLookup } from './news.ts';
+import { bulletinText, parseWriting, writingPrompt, WRITING_SCHEMA, type NewsEdition } from '../shared/news.ts';
 import { clip, plainText, stuckAgents } from './notify.ts';
 import { DEFAULT_NOTIFY, notifySettings, officeUrl } from '../shared/notify.ts';
 import { agentActivity, lineActivity, sameActivity, type SeenActivity } from '../shared/activity.ts';
@@ -287,6 +289,8 @@ const EFFORTS: EffortLevel[] = ['low', 'medium', 'high', 'xhigh', 'max'];
 // The CEO thinks harder than the staff: Opus 5.5 at xhigh effort unless the manager changes it.
 const CEO_MODEL = 'claude-opus-5-5';
 const CEO_EFFORT: EffortLevel = 'xhigh';
+/** The Gazette's words are a cheap job: the smallest Claude model, low effort. */
+const NEWS_MODEL = 'claude-haiku-4-5';
 const CEO_NAME = 'Morgan';
 // The CEO's own folder: its notes about the company live here. Repos are read through their clones.
 const CEO_DIR = path.join(HOME_DIR, 'ceo');
@@ -545,6 +549,8 @@ export class Swarm {
   private readonly envSecrets = envSecrets(process.env);
   /** Notifications to the manager's devices and chat apps (docs/pocket.md). The demo's only log what they'd send. */
   readonly notifier: Notifier;
+  /** The Cubefarm Gazette, the radio's bulletins and the all-hands (#268). The demo keeps its own. */
+  readonly news: NewsDesk;
   private toldStuck = new Set<string>(); // `${agentId}:${endedAt}`: agents in an error the manager was notified about
 
   constructor(private backend: Backend) {
@@ -580,6 +586,30 @@ export class Swarm {
       broadcast: (note) => this.broadcast({ type: 'notify', note }),
       channelsChanged: (notifyChannels) => this.broadcast({ type: 'notifyChannels', notifyChannels }),
       log: (line) => console.warn(line),
+    });
+    this.news = new NewsDesk({
+      dir: path.join(HOME_DIR, backend.demo ? 'demo-news' : 'news'),
+      company: () => this.state.settings.companyName,
+      backlog: () =>
+        this.state.repos
+          .flatMap((r) => (this.repoRt.get(r.id)?.issues ?? []).map((i) => ({ floor: r.floor, repo: r.fullName.split('/')[1] ?? r.fullName, number: i.number, title: i.title })))
+          .sort((a, b) => a.floor - b.floor || a.number - b.number),
+      mayWrite: () => this.usageNow().state === 'normal' && this.state.agents.some((a) => a.id === CEO_ID),
+      write: (edition) => this.writeNews(edition),
+      people: () => this.state.agents.flatMap((a) => (a.role === 'ceo' ? [] : [{ id: a.id, role: a.role, status: a.status, floor: this.floorOf(a) ?? 0, desk: a.desk }])),
+      changed: (news) => this.broadcast({ type: 'news', news }),
+      seed: backend.seedNews
+        ? (now) =>
+            backend.seedNews!(
+              this.state.repos.map((r) => {
+                const team = this.state.agents.filter((a) => a.repoId === r.id);
+                const people = (role: string) => team.filter((a) => a.role === role).map((a) => ({ id: a.id, name: a.name }));
+                return { floor: r.floor, repoId: r.id, repo: r.fullName.split('/')[1] ?? r.fullName, devs: people('dev'), testers: people('qa') };
+              }),
+              now,
+            )
+        : undefined,
+      log: (line) => console.log(line),
     });
     this.previews = new Previews(backend, {
       emit: (id) => {
@@ -682,6 +712,7 @@ export class Swarm {
       // first run
     }
     await this.voice.init();
+    await this.news.init();
     await this.weather.init();
     await this.notifier.init();
     for (const r of this.state.repos) if (r.localPath) this.backend.setLocalPath(r.fullName, r.localPath);
@@ -789,6 +820,7 @@ export class Swarm {
       })
       .catch((err) => console.warn('could not look for agent CLIs', err));
     await this.journal.start();
+    this.news.start();
     // A fresh demo office has yesterday to replay too.
     if (this.backend.demo) void this.journal.hasPastDays().then((has) => (has ? undefined : this.journalSample())).catch((err) => console.warn('could not write the sample day', err));
     this.save();
@@ -970,6 +1002,7 @@ export class Swarm {
       officeUpdate: this.officeHead ? this.officeUpdateView() : undefined,
       progress: this.progressView(),
       pong: this.state.pong,
+      news: this.news.view(),
     };
   }
 
@@ -1556,6 +1589,7 @@ export class Swarm {
   async shutdown(restart = false): Promise<void> {
     await this.writeState().catch((err) => console.warn('could not save the state', err));
     await this.journal.close().catch((err) => console.warn('could not write the journal', err));
+    await this.news.stop().catch((err) => console.warn('could not save the news log', err));
     await this.backend.releaseClis(restart); // before the terminals are saved: whatever they print next waits in the keeper
     await this.saveTerminals(true);
     await this.previews.stopAll(this.state.repos);
@@ -1589,6 +1623,7 @@ export class Swarm {
     try {
       const started = Date.now();
       const [issues, pulls] = await Promise.all([this.backend.listIssues(repo.fullName), this.backend.listPulls(repo.fullName)]);
+      if (rt.lastSync !== null) this.noteIssues(repo, rt.issues, issues);
       rt.issues = issues;
       rt.pulls = pulls;
       this.issueAges.learn(repo.id, issues);
@@ -1926,6 +1961,7 @@ export class Swarm {
     };
     this.state.agents.push(agent);
     applyLedger(this.state.progress, { kind: 'hired', agentId: agent.id, at: Date.now() });
+    this.news.note({ at: Date.now(), kind: 'hired', floor: repo.floor, repoId: repo.id, repo: repo.fullName.split('/')[1], who: name, whoId: agent.id, ...(agent.title ? { detail: agent.title } : {}) });
     this.agentRt.set(agent.id, { log: [], session: null, currentTool: null, browserUrl: null, screenshot: null, shots: [], terminal: null });
     this.appendLog(agent, [
       { kind: 'system', text: role === 'qa' ? `🔍 ${name} joined the QA lab on floor ${repo.floor} (${repo.fullName}).` : `👋 ${name} joined floor ${repo.floor} (${repo.fullName}).` },
@@ -3637,7 +3673,7 @@ export class Swarm {
     }
     if (!a || BUSY.includes(a.status) || c.job || c.queue.length === 0) return;
     if (this.slotsFull()) return;
-    const rank: Record<CeoJob['kind'], number> = { chat: 0, triage: 0, onboard: 1, plan: 1, review: 2 };
+    const rank: Record<CeoJob['kind'], number> = { chat: 0, triage: 0, onboard: 1, plan: 1, review: 2, news: 3 };
     // A floor's jobs wait for its clone and first sync, so the CEO has something to read.
     const ready = (j: CeoJob) => {
       const rt = j.repoId ? this.repoRt.get(j.repoId) : undefined;
@@ -3687,9 +3723,12 @@ export class Swarm {
       // stopped before the session started
       this.state.ceo.job = null;
       if (job.kind === 'triage') this.endTriage(job);
+      if (job.kind === 'news' && job.edition) this.news.writeFailed(job.edition);
       this.emitCeo();
       return;
     }
+    // The Gazette is a short, cheap session of its own: no follow-up, a small model, a JSON answer not for the phone.
+    const news = job.kind === 'news';
     // A chat carries on from the CEO's last session, so "why did you propose that?" has an answer.
     const how = this.sessionRuntime(a, job.kind === 'chat' ? (a.sessionId ?? undefined) : undefined);
     rt.session = this.backend.startSession(
@@ -3697,12 +3736,13 @@ export class Swarm {
         cwd: CEO_DIR,
         prompt: ceoJobPrompt(job, floor, triage),
         systemAppend: ceoSystemPrompt(this.ceoPromptInput(a)),
-        model: a.model || CEO_MODEL,
-        effort: a.effort || CEO_EFFORT,
+        model: news ? NEWS_MODEL : a.model || CEO_MODEL,
+        effort: news ? 'low' : a.effort || CEO_EFFORT,
         browserTesting: false,
-        additionalDirectories: this.state.repos.filter((r) => this.repoRt.get(r.id)?.cloneStatus === 'ready').map((r) => this.backend.mainDir(r.fullName)),
+        additionalDirectories: news ? [] : this.state.repos.filter((r) => this.repoRt.get(r.id)?.cloneStatus === 'ready').map((r) => this.backend.mainDir(r.fullName)),
         role: 'ceo',
         office: this.officeTools(),
+        ...(news ? { outputSchema: WRITING_SCHEMA as unknown as Record<string, unknown> } : {}),
         ...how,
       },
       {
@@ -3718,7 +3758,7 @@ export class Swarm {
         },
         browserUrl: () => undefined,
         screenshot: () => undefined,
-        turn: (text) => this.postMessage('ceo', text),
+        turn: (text) => (news ? undefined : this.postMessage('ceo', text)),
         limited: (at) => this.pauseForLimit(at),
         usageWarning: (info) => this.paceForWarning(info),
         finished: (result) => this.onCeoFinished(a, result),
@@ -3738,6 +3778,11 @@ export class Swarm {
     const job = this.state.ceo.job;
     this.state.ceo.job = null;
     if (job?.kind === 'triage') this.endTriage(job);
+    if (job?.kind === 'news' && job.edition) {
+      const id = job.edition;
+      if (result.ok) void this.news.written(id, result.structured ?? parseWriting(result.text)).catch(() => this.news.writeFailed(id));
+      else this.news.writeFailed(id);
+    }
     if (result.interrupted) this.interrupted(a);
     if (a.status === 'stopped') {
       // the manager already logged the stop
@@ -3778,6 +3823,47 @@ export class Swarm {
   requestReview() {
     if (this.state.repos.length === 0) throw new HttpError(400, 'Connect a repo first: the CEO needs a floor to review.');
     this.enqueueCeo({ kind: 'review', at: Date.now() });
+  }
+
+  // ---------- company news (#268) ----------
+
+  /** The news desk asks the CEO to rewrite an edition's words. */
+  private writeNews(edition: NewsEdition) {
+    this.enqueueCeo({ kind: 'news', edition: edition.id, text: writingPrompt(edition, this.state.settings.companyName), at: Date.now() });
+  }
+
+  private newsLookup(): NewsLookup {
+    return {
+      agent: (id) => {
+        const a = this.state.agents.find((x) => x.id === id);
+        return a ? { name: a.name, floor: this.floorOf(a), title: a.title } : null;
+      },
+      floor: (key) => {
+        const r = this.state.repos.find((x) => x.id === key || x.fullName === key);
+        return r ? { floor: r.floor, repoId: r.id, repo: r.fullName.split('/')[1] ?? r.fullName } : null;
+      },
+    };
+  }
+
+  /** Issues a sync found filed or closed since the one before. */
+  private noteIssues(repo: PersistedRepo, before: IssueInfo[], after: IssueInfo[]) {
+    const { filed, closed } = issueChanges(before, after);
+    const at = Date.now();
+    const where = { floor: repo.floor, repoId: repo.id, repo: repo.fullName.split('/')[1] ?? repo.fullName };
+    this.news.note(...filed.map((i) => ({ at, kind: 'filed' as const, ...where, issue: i.number, title: i.title })), ...closed.map((i) => ({ at, kind: 'closed' as const, ...where, issue: i.number, title: i.title })));
+  }
+
+  /** GET /api/news/:id/bulletin: the radio's bulletin for an edition, in the CEO's ElevenLabs voice (cached). */
+  async newsBulletin(id: string) {
+    const e = await this.news.read(id);
+    return this.voice.newsAudio(bulletinText(e, this.ceo().name, this.state.settings.companyName));
+  }
+
+  /** The console's all-hands button: start one now, or stop the one that's on. */
+  allHands(action: unknown) {
+    if (action === 'start') return this.news.startAllHands('manager');
+    if (action === 'stop') return this.news.endAllHands();
+    throw new HttpError(400, 'action is "start" or "stop"');
   }
 
   onboardFloor(repoId: string) {
@@ -4032,7 +4118,9 @@ export class Swarm {
 
   /** Tell the ledger something happened; send on whatever it changed. emitAgents false: the caller emits them. */
   private ledger(ev: LedgerEvent, emitAgents = true) {
-    this.fanout(applyLedger(this.state.progress, ev), emitAgents);
+    const fx = applyLedger(this.state.progress, ev);
+    if (fx.changed) this.news.note(...newsFromLedger(ev, fx, this.newsLookup(), Date.now()));
+    this.fanout(fx, emitAgents);
   }
 
   private fanout(fx: Effects, emitAgents = true) {
@@ -4191,6 +4279,10 @@ export class Swarm {
     });
     const board = recordGame(this.state.pong[repoId] ?? [], { players: [a, b], score: game.score, at: Date.now() });
     this.state.pong[repoId] = board;
+    const repo = this.repo(repoId);
+    const [win, lose] = game.score[0] >= game.score[1] ? [a, b] : [b, a];
+    const [hi, lo] = [Math.max(...game.score), Math.min(...game.score)];
+    this.news.note({ at: Date.now(), kind: 'pong', floor: repo.floor, repoId, repo: repo.fullName.split('/')[1], who: win.name, ...(win.id !== PONG_PLAYER ? { whoId: win.id } : {}), detail: `${hi}–${lo} over ${lose.name}` });
     this.broadcast({ type: 'pong', repoId, board });
     this.save();
     return board;
