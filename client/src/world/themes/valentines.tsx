@@ -2,7 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { agentsOnRepo, coversView, useStore } from '../../store';
-import { deskPosition, qaDeskPosition, QA_ROTATION } from '../layout';
+import { seatPlace } from '../layout';
 import { say } from '../people';
 import { deskSpot, qaSpot } from '../walkways';
 import { addProbe, useThemeRuntime } from './active';
@@ -61,9 +61,7 @@ interface Sticky {
 
 /** The heart on a monitor: its top right corner (the QA sticky goes on the left), facing the desk's owner. */
 function stickyAt(p: Person) {
-  const qa = p.role === 'qa';
-  const { x, z } = qa ? qaDeskPosition(p.desk) : deskPosition(p.desk);
-  const turn = qa ? QA_ROTATION : 0;
+  const { x, z, rotY: turn } = seatPlace(p.role, p.desk);
   const [lx, lz] = [0.4, -0.262];
   return { x: x + lx * Math.cos(turn) + lz * Math.sin(turn), y: 1.58, z: z - lx * Math.sin(turn) + lz * Math.cos(turn), yaw: turn };
 }

@@ -4,7 +4,7 @@
 
 import type { KanbanCard, KanbanColumns } from '../store';
 import { kanbanCapacity, kanbanNoteRect, KANBAN_KEYS } from './draw';
-import { BOARD, deskPosition, QA_ROTATION, qaDeskPosition } from './layout';
+import { BOARD, seatPlace } from './layout';
 
 export type Col = keyof KanbanColumns;
 
@@ -221,11 +221,9 @@ export function boardPose(col: Col, index: number, number: number, out: Pose): P
 
 /** The little sticky on a tester's monitor (a QA station's, or a developer's desk when they test): its top corner, facing them. */
 export function monitorPose(who: { role: string; desk: number }, out: Pose): Pose {
-  const qa = who.role === 'qa';
-  const { x, z } = qa ? qaDeskPosition(who.desk) : deskPosition(who.desk);
+  const { x, z, rotY: turn } = seatPlace(who.role, who.desk);
   const lx = -0.43; // desk space (Desk.tsx): the monitor's front is at z -0.275, its top edge at y 1.645
   const lz = -0.268;
-  const turn = qa ? QA_ROTATION : 0;
   const c = Math.cos(turn);
   const s = Math.sin(turn);
   out.x = x + lx * c + lz * s;

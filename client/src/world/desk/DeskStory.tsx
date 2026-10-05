@@ -9,7 +9,7 @@ import { deskItems, mvpOfWeek, newCareer, stickerFor, type DeskToy } from '../..
 import type { Agent } from '../../store';
 import { roundRect, SANS } from '../draw';
 import { useCanvasTexture } from '../interact';
-import { HALF_D, QA_ROTATION, deskPosition, qaDeskPosition } from '../layout';
+import { HALF_D, seatPlace } from '../layout';
 import { ball, box, cone, cyl, model, ramp, torus, vertexToon, type Part } from '../decor/parts';
 import { deskLayout, MONITOR, PLAQUE, SHELF, STICKER, type Spot } from './deskLayout';
 
@@ -175,8 +175,8 @@ function buildStory(agents: Agent[], now: number): Story {
   const story: Story = { shelves: [], plaques: [], stars: [], pots: [], foliage: [], frames: [], toys: { duck: [], speaker: [], cradle: [], magnifier: [] }, labels: [] };
   for (const a of agents) {
     if (a.role !== 'dev' && a.role !== 'qa') continue;
-    const p = a.role === 'qa' ? qaDeskPosition(a.desk) : deskPosition(a.desk);
-    const frame = new THREE.Matrix4().makeRotationY(a.role === 'qa' ? QA_ROTATION : 0).setPosition(p.x, 0, p.z);
+    const p = seatPlace(a.role, a.desk);
+    const frame = new THREE.Matrix4().makeRotationY(p.rotY).setPosition(p.x, 0, p.z);
     const lay = deskLayout(deskItems(a.career ?? newCareer(now), a, now), a.role);
     if (lay.shelf) story.shelves.push(at(frame, { x: 0, y: SHELF.y, z: SHELF.z }));
     for (const { n, at: s } of lay.plaques) {

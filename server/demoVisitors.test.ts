@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { collide, lobbyColliders, officeColliders, type Rect } from '../client/src/world/layout.ts';
+import { FLOOR_LAYOUTS, FLOOR_STYLES } from '../shared/floorLook.ts';
 import { LIFT, ROUTES, fakeProfile, newWalker, poseOf, stepWalker } from './demoVisitors.ts';
 
 /** Every 10 cm along a closed route, someone standing there isn't pushed out of anything. */
@@ -23,6 +24,10 @@ describe('demo visitors', () => {
     expect(blocked(ROUTES.office, officeColliders())).toEqual([]);
     expect(blocked(ROUTES.lobby, lobbyColliders())).toEqual([]);
     expect(blocked([ROUTES.office[0], LIFT.door], officeColliders())).toEqual([]);
+  });
+
+  it.each(FLOOR_LAYOUTS)('walk through open floor in the %s layout, whatever the style', (layout) => {
+    for (const style of FLOOR_STYLES) expect(blocked(ROUTES.office, officeColliders(layout, style)), style).toEqual([]);
   });
 
   it('stay out of sight until a real visitor is somewhere, then turn up on their floor', () => {

@@ -16,7 +16,7 @@ import { Character } from './Character';
 import { NameTag } from './Desk';
 import { FoodLook, OpenPizza, PIZZA_STACK, PizzaBox } from './food';
 import { useInteractable } from './interact';
-import { QA_ROTATION, deskPosition, qaDeskPosition } from './layout';
+import { seatPlace } from './layout';
 import { meals, mealsVersion, subscribeMeals } from './meals';
 import { isHidden } from './people';
 import { COURIER_ID, LobbyRitualRunner, OfficeRitualRunner } from './ritualRunner';
@@ -138,9 +138,8 @@ function Visitor({ agent, ceo = false, carrying, scale }: { agent: Agent; ceo?: 
 
 /** Where something on a desk is in the world: the desk's place and turn, then the spot on it (desk space). */
 function onDesk(a: Agent, x: number, y: number, z: number) {
-  const qa = a.role === 'qa';
-  const d = qa ? qaDeskPosition(a.desk) : deskPosition(a.desk);
-  const turn = qa ? QA_ROTATION : 0;
+  const d = seatPlace(a.role, a.desk);
+  const turn = d.rotY;
   return { x: d.x + x * Math.cos(turn) + z * Math.sin(turn), y, z: d.z - x * Math.sin(turn) + z * Math.cos(turn), turn };
 }
 

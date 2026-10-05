@@ -1,4 +1,4 @@
-import { COFFEE_CORNER, ELEVATOR, GONG_SPOT, HALF_D, HALF_W, JUKEBOX, RECEPTION, type Rect } from '../layout';
+import { COFFEE_CORNER, ELEVATOR, GONG_SPOT, HALF_D, HALF_W, JUKEBOX, LAYOUTS, RECEPTION, officeLook, type Rect } from '../layout';
 import { walkways, type FloorKind } from '../walkways';
 import { PLANTS, clear, type Pt } from './roombaBrain';
 
@@ -77,9 +77,8 @@ function officePlaces(rects: Rect[]): Omit<DogPlaces, 'floor' | 'rects' | 'door'
     naps: [
       // the north end of the couch's seat, clear of whoever sits at its south end; up from between it and the coffee table
       { id: 'couch', x: -HALF_W + 1.05, z: 5.6, heading: SOUTH, y: SEAT_Y, from: { x: -HALF_W + 1.8, z: 5.3 } },
-      // the desk rugs, in the gaps between desks
-      ...[-7, 0, 7].map((x) => ({ id: `rug-${x}`, x, z: 3.35, heading: x < 0 ? EAST : WEST, y: 0, from: null })),
-      ...[-7, 7].map((x) => ({ id: `rug-${x}-mid`, x, z: -1.25, heading: x < 0 ? EAST : WEST, y: 0, from: null })),
+      // the desk rugs, in the gaps between desks (the layout's)
+      ...LAYOUTS[officeLook().layout].naps.map(({ x, z }, i) => ({ id: `rug-${i}`, x, z, heading: x < 0 ? EAST : WEST, y: 0, from: null })),
     ],
     sniffs: [
       ...plantSniffs('office', rects),
@@ -113,16 +112,17 @@ function lobbyPlaces(rects: Rect[]): Omit<DogPlaces, 'floor' | 'rects' | 'door' 
   };
 }
 
-const cache = new Map<FloorKind, DogPlaces>();
+const cache = new Map<object, DogPlaces>();
 
-/** The dog's places on a floor kind (built once, then cached). */
+/** The dog's places on a floor kind (built once per walk grid, then cached: an office floor's follow its layout). */
 export function dogPlaces(floor: FloorKind): DogPlaces {
-  let p = cache.get(floor);
+  const w = walkways(floor);
+  let p = cache.get(w);
   if (p) return p;
-  const rects = walkways(floor).nav.rects;
+  const rects = w.nav.rects;
   const spots = floor === 'office' ? officePlaces(rects) : lobbyPlaces(rects);
   p = { floor, rects, ...spots, door: { x: 0, z: HALF_D - 0.9 }, cabin: { x: 0.55, z: HALF_D + 1.1 } };
-  cache.set(floor, p);
+  cache.set(w, p);
   return p;
 }
 

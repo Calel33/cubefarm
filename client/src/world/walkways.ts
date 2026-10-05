@@ -1,5 +1,6 @@
 import { kanbanColumnSpan, KANBAN_KEYS } from './draw';
-import { BOARD, CEO_DESK, COFFEE_CORNER, GONG_SPOT, HALF_D, HALF_W, JUKEBOX, MANAGER_DESK, MAX_DESKS, PLAYER_RADIUS, PONG_TABLE, QA_LAB, RECEPTION, deskPosition, qaDeskPosition } from './layout';
+import type { FloorLayout } from '../../../shared/floorLook';
+import { BOARD, CEO_DESK, COFFEE_CORNER, GONG_SPOT, HALF_D, HALF_W, JUKEBOX, MANAGER_DESK, MAX_DESKS, PLAYER_RADIUS, PONG_TABLE, QA_LAB, RECEPTION, deskPlace, deskPoint, officeLook, qaDeskPosition } from './layout';
 import { hoopRim } from './toys/hoopScore';
 import { clear, makeNav, planPath, roombaRects, type Nav, type Pt } from './toys/roombaBrain';
 
@@ -40,10 +41,10 @@ export interface Walkways {
 
 const STAND_BACK = 1.5; // behind a desk's chair, where its occupant stands up
 
-/** Developer desk `slot`'s "stand up here" spot, just behind the chair, facing the desk. */
-export function deskSpot(slot: number): Spot {
-  const { x, z } = deskPosition(slot);
-  return { id: `desk-${slot}`, x, z: z + STAND_BACK, facing: NORTH };
+/** Developer desk `slot`'s "stand up here" spot, just behind the chair, facing the desk (which way that is turns with the layout). */
+export function deskSpot(slot: number, layout?: FloorLayout): Spot {
+  const d = deskPlace(slot, layout);
+  return { id: `desk-${slot}`, ...deskPoint(d, 0, STAND_BACK), facing: Math.atan2(-Math.cos(d.rotY), -Math.sin(d.rotY)) };
 }
 
 /** QA station `slot`'s spot: behind the tester's chair (testers face the east wall). */
@@ -144,11 +145,16 @@ function lobbySpots(): Spot[] {
 
 // ---------- the walk grid ----------
 
-const cache = new Map<FloorKind, Walkways>();
+const cache = new Map<string, Walkways>();
 
-/** A floor kind's walk grid and named spots (built once, then cached). */
+/**
+ * A floor kind's walk grid and named spots (built once, then cached). An office floor's are its layout's and style's:
+ * the floor on screen's (layout.ts's officeLook()).
+ */
 export function walkways(floor: FloorKind): Walkways {
-  let w = cache.get(floor);
+  const look = officeLook();
+  const key = floor === 'office' ? `office:${look.layout}:${look.style}` : floor;
+  let w = cache.get(key);
   if (w) return w;
   // Everything the roomba steers round (furniture, walls, the elevator doorway, plant pots, its dock), a person wide.
   // A slightly greedy search: paths get smoothed into straight legs anyway, and it searches far fewer cells.
@@ -159,7 +165,7 @@ export function walkways(floor: FloorKind): Walkways {
       ? [...Array.from({ length: MAX_DESKS }, (_, s) => deskSpot(s)), ...QA_LAB.stations.map((_, s) => qaSpot(s))]
       : spots.filter((s) => s.id === 'ceo');
   w = { floor, nav, spots, homes };
-  cache.set(floor, w);
+  cache.set(key, w);
   return w;
 }
 

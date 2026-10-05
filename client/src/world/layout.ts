@@ -1,5 +1,7 @@
 // Every floor of the building shares one footprint. Units are metres; -Z is "north".
 
+import { DEFAULT_FLOOR_LAYOUT, DEFAULT_FLOOR_STYLE, type FloorLayout, type FloorStyle } from '../../../shared/floorLook';
+
 export const FLOOR_W = 32; // x from -16 to 16
 export const FLOOR_D = 24; // z from -12 to 12
 export const WALL_H = 3.6;
@@ -166,6 +168,7 @@ export const elevatorDoorway = (): Rect => ({ minX: -ELEVATOR.doorHalf, maxX: EL
 
 // ---------- office floors ----------
 
+// The open plan's grid; the other layouts (below) place the same twelve desks their own way.
 export const DESK_COLS = [-10.5, -3.5, 3.5, 10.5];
 export const DESK_ROWS = [-6.2, -1.6, 3.0];
 export const MAX_DESKS = DESK_COLS.length * DESK_ROWS.length;
@@ -175,11 +178,123 @@ export const DESK = { w: 1.9, d: 0.95, h: 0.74 };
 /** One long rug under each row of desks (and their chairs). */
 export const DESK_RUGS: Rect[] = DESK_ROWS.map((z) => rect(0, z + 0.35, 24.4, 2.9));
 
-/** Desks fill from the row nearest the elevator, so a new team is visible as soon as you arrive. */
-export function deskPosition(slot: number) {
-  const row = DESK_ROWS.length - 1 - (Math.floor(slot / DESK_COLS.length) % DESK_ROWS.length);
-  const col = slot % DESK_COLS.length;
-  return { x: DESK_COLS[col], z: DESK_ROWS[row] };
+// ---------- desk layouts (#265) ----------
+
+/**
+ * Where a desk stands and how it's turned about y: 0 faces north (its chair, and whoever sits in it, to the south of
+ * it), π faces south. A point (lx, lz) in the desk's own frame is deskPoint(place, lx, lz) in the room.
+ */
+export interface DeskPlace {
+  x: number;
+  z: number;
+  rotY: number;
+}
+
+/** A desk layout: its twelve desks in the order they fill, the rugs under them and anything else it stands up. */
+export interface LayoutPlan {
+  desks: DeskPlace[];
+  rugs: Rect[];
+  /** Cubicle partitions and the like: solid, `h` tall. */
+  partitions: Rect[];
+  /** Places on the rugs, between desks, where the dog may nap. */
+  naps: { x: number; z: number }[];
+}
+
+/** How tall the cubicles' partitions are: low enough to see over standing up. */
+export const PARTITION = { h: 1.25, t: 0.06 };
+/** The cubicle farm's grid: a cubicle is `w` wide, its back wall `back` behind the desk's middle, its sides to `front`. */
+export const CUBICLE = { cols: [-3.45, -1.15, 1.15, 3.45], rows: [-7.4, -4.3, -1.2], w: 2.3, back: 0.6, front: 1.0 };
+/** Pods: three clusters of four, two desks a side back to back, at these middles. */
+export const PODS = [
+  { x: 0, z: -3 },
+  { x: -9.7, z: -3 },
+  { x: 9.7, z: -3 },
+];
+/** Benching: two long tables end to end, three seats a side each, across the middle of the room. */
+export const BENCHES = { xs: [-3.55, 3.55], z: -3.5, seats: 3 };
+
+const NORTH_FACING = 0;
+const SOUTH_FACING = Math.PI;
+
+function openPlan(): LayoutPlan {
+  // Desks fill from the row nearest the elevator, so a new team is visible as soon as you arrive.
+  const desks = Array.from({ length: MAX_DESKS }, (_, slot) => {
+    const row = DESK_ROWS.length - 1 - (Math.floor(slot / DESK_COLS.length) % DESK_ROWS.length);
+    return { x: DESK_COLS[slot % DESK_COLS.length], z: DESK_ROWS[row], rotY: NORTH_FACING };
+  });
+  const naps = [...[-7, 0, 7].map((x) => ({ x, z: 3.35 })), ...[-7, 7].map((x) => ({ x, z: -1.25 }))];
+  return { desks, rugs: DESK_RUGS, partitions: [], naps };
+}
+
+/** Two desks a side, back to back: the south pair (facing north, towards the board) fills first. */
+function backToBack(cx: number, cz: number, xs: number[]): DeskPlace[] {
+  const half = DESK.d / 2;
+  return [...xs.map((x) => ({ x: cx + x, z: cz + half, rotY: NORTH_FACING })), ...xs.map((x) => ({ x: cx + x, z: cz - half, rotY: SOUTH_FACING }))];
+}
+
+function podsPlan(): LayoutPlan {
+  const desks = PODS.flatMap((p) => backToBack(p.x, p.z, [-DESK.w / 2, DESK.w / 2]));
+  return { desks, rugs: PODS.map((p) => rect(p.x, p.z, 5, 3.9)), partitions: [], naps: PODS.map((p) => ({ x: p.x + (p.x > 0 ? -2.75 : 2.75), z: p.z })) };
+}
+
+function cubiclesPlan(): LayoutPlan {
+  const c = CUBICLE;
+  const t = PARTITION.t;
+  const desks = [...c.rows].reverse().flatMap((z) => c.cols.map((x) => ({ x, z, rotY: NORTH_FACING })));
+  const span = c.cols.length * c.w;
+  const partitions = c.rows.flatMap((z) => [
+    rect(0, z - c.back, span + t, t, PARTITION.h), // the row's back wall
+    // a side wall between every two cubicles and at each end of the row
+    ...Array.from({ length: c.cols.length + 1 }, (_, i) => ({ minX: -span / 2 + i * c.w - t / 2, maxX: -span / 2 + i * c.w + t / 2, minZ: z - c.back, maxZ: z + c.front, h: PARTITION.h })),
+  ]);
+  const rugs = c.rows.map((z) => rect(0, z + 0.45, span + 0.4, 2.3));
+  return { desks, rugs, partitions, naps: [{ x: -6, z: -4 }, { x: 6, z: -4 }, { x: 0, z: 1.6 }] };
+}
+
+function benchingPlan(): LayoutPlan {
+  const b = BENCHES;
+  const along = Array.from({ length: b.seats }, (_, i) => (i - (b.seats - 1) / 2) * DESK.w);
+  const sides = b.xs.map((x) => backToBack(x, b.z, along));
+  // the south sides of both tables fill first, west to east, then the north sides
+  const desks = [...sides.flatMap((s) => s.slice(0, b.seats)), ...sides.flatMap((s) => s.slice(b.seats))];
+  return { desks, rugs: b.xs.map((x) => rect(x, b.z, b.seats * DESK.w + 0.7, 3.9)), partitions: [], naps: [{ x: 0, z: b.z }, { x: -8.4, z: b.z }, { x: 8.4, z: b.z }] };
+}
+
+/** Every desk layout's plan. */
+export const LAYOUTS: Record<FloorLayout, LayoutPlan> = { open: openPlan(), pods: podsPlan(), cubicles: cubiclesPlan(), benching: benchingPlan() };
+
+// The office floor on screen: its layout and style (Game.tsx sets them as you arrive, or as the manager changes them).
+// Everything placed by desk slot asks deskPlace(), which follows it unless told a layout.
+let active: { layout: FloorLayout; style: FloorStyle } = { layout: DEFAULT_FLOOR_LAYOUT, style: DEFAULT_FLOOR_STYLE };
+
+/** The office floor on screen's layout and style. */
+export const officeLook = () => active;
+
+/** Called as the office floor on screen (or its look) changes; nothing else should call it. */
+export function setOfficeLook(look: { layout: FloorLayout; style: FloorStyle }) {
+  if (look.layout !== active.layout || look.style !== active.style) active = { layout: look.layout, style: look.style };
+}
+
+/** Where developer desk `slot` stands, and its turn, in a layout (the one on screen by default). */
+export const deskPlace = (slot: number, layout: FloorLayout = active.layout): DeskPlace => LAYOUTS[layout].desks[slot % MAX_DESKS];
+
+/** Where developer desk `slot` stands. */
+export function deskPosition(slot: number, layout: FloorLayout = active.layout) {
+  const { x, z } = deskPlace(slot, layout);
+  return { x, z };
+}
+
+/** A point in a desk's own frame (x along it, +z towards its chair) in the room. */
+export function deskPoint(place: DeskPlace, lx: number, lz: number) {
+  const c = Math.cos(place.rotY);
+  const s = Math.sin(place.rotY);
+  return { x: place.x + lx * c + lz * s, z: place.z - lx * s + lz * c };
+}
+
+/** A w x d box (along x, z in its own frame) at (x, z), turned by a multiple of a right angle, as a Rect. */
+function turnedRect(x: number, z: number, w: number, d: number, rotY: number, h?: number): Rect {
+  const across = Math.abs(Math.sin(rotY)) > 0.5;
+  return rect(x, z, across ? d : w, across ? w : d, h);
 }
 
 export const BOARD = { w: 12, h: 3.0, y: 0.45, z: -HALF_D + 0.06 };
@@ -222,6 +337,9 @@ export const PONG_BOARD = { x: -8.4, y: 1.95, w: 1.5, h: 1.3 };
 export const QA_LAB = { x: HALF_W - 2.0, stations: [-5.2, -2.0, 1.2] };
 export const QA_ROTATION = -Math.PI / 2;
 export const qaDeskPosition = (slot: number) => ({ x: QA_LAB.x, z: QA_LAB.stations[slot % QA_LAB.stations.length] });
+/** Where someone's desk is and how it's turned: a QA station (the same in every layout) or a developer desk. */
+export const seatPlace = (role: string, slot: number, layout: FloorLayout = active.layout): DeskPlace =>
+  role === 'qa' ? { ...qaDeskPosition(slot), rotY: QA_ROTATION } : deskPlace(slot, layout);
 export const QA_RUG = rect(QA_LAB.x - 0.4, -2, 3.4, 10.4);
 
 // ---------- decorations (#210) ----------
@@ -269,29 +387,56 @@ export const DECOR_SLOT_AT: Record<string, DecorSpot> = {
 export const DECOR_BOX = { x: 3.4, z: HALF_D - 0.3, w: 0.8, d: 0.55, h: 0.6 };
 export const decorBoxRect = (): Rect => rect(DECOR_BOX.x, DECOR_BOX.z, DECOR_BOX.w, DECOR_BOX.d, DECOR_BOX.h);
 
-export function officeColliders(): Rect[] {
-  const out = [...shellColliders('office'), ...outsideColliders('office')];
-  for (let s = 0; s < MAX_DESKS; s++) {
-    const { x, z } = deskPosition(s);
-    out.push(rect(x, z, DESK.w + 0.1, DESK.d + 0.1, SOLID_H.desk));
-    out.push(rect(x, z + 0.8, 0.7, 0.6, SOLID_H.seated)); // chair + occupant
+/**
+ * The style's feature against the north wall, between the whiteboard's plant and the roomba's dock, under the "ship it"
+ * sign: the library's fireplace and bookshelves, the greenhouse's fountain, and so on (world/StyleDressing.tsx). Classic
+ * leaves the wall bare. d is how far it may stick out, h how tall it may stand.
+ */
+export const STYLE_FEATURE = { x: 9.85, w: 4.1, d: 0.6, h: 2.3 };
+export const styleFeatureRect = (): Rect => rect(STYLE_FEATURE.x, -HALF_D + STYLE_FEATURE.d / 2, STYLE_FEATURE.w, STYLE_FEATURE.d, STYLE_FEATURE.h);
+
+/**
+ * The fixed furniture every office floor keeps where it is, by name, in every layout and style: the desks are laid out
+ * round them (layout.test.ts checks none of them is in a layout's way).
+ */
+export function officeAnchors(): Record<string, Rect> {
+  const a = APP_SCREEN;
+  return {
+    whiteboard: rect(0, -HALF_D + 0.25, BOARD.w + 0.4, 0.5, SOLID_H.board), // with its marker tray
+    appMonitor: rect(a.x, -HALF_D + a.depth / 2, a.w + a.bezel * 2, a.depth, a.y + a.h / 2 + a.bezel), // up to its top bezel
+    couch: rect(-HALF_W + 0.9, 6.5, 1.1, 3.2, SOLID_H.couch),
+    coffeeTable: rect(-HALF_W + 2.6, 6.5, 0.9, 1.4, SOLID_H.coffeeTable),
+    blasterRack: blasterRack(BLASTER_RACK.officeX),
+    jukebox: jukeboxRect(JUKEBOX.officeX),
+    gong: gongRect(),
+    pongTable: pongTableRect(),
+    kitchenette: rect(HALF_W - 0.45, 7.4, 0.9, 5, SOLID_H.kitchen), // counter + fridge
+    cooler: rect(HALF_W - 0.5, -9.5, 0.7, 0.7, SOLID_H.cooler),
+    decorBox: decorBoxRect(),
+  };
+}
+
+/** A layout's desks with their chairs (and whoever sits in them), and its partitions. */
+export function layoutColliders(layout: FloorLayout = active.layout): Rect[] {
+  const out: Rect[] = [];
+  for (const d of LAYOUTS[layout].desks) {
+    out.push(turnedRect(d.x, d.z, DESK.w + 0.1, DESK.d + 0.1, d.rotY, SOLID_H.desk));
+    const chair = deskPoint(d, 0, 0.8);
+    out.push(turnedRect(chair.x, chair.z, 0.7, 0.6, d.rotY, SOLID_H.seated)); // chair + occupant
   }
+  out.push(...LAYOUTS[layout].partitions);
+  return out;
+}
+
+/** An office floor's colliders, for its layout and style (the floor on screen's by default). */
+export function officeColliders(layout: FloorLayout = active.layout, style: FloorStyle = active.style): Rect[] {
+  const out = [...shellColliders('office'), ...outsideColliders('office'), ...layoutColliders(layout)];
   for (const z of QA_LAB.stations) {
     out.push(rect(QA_LAB.x, z, DESK.d + 0.1, DESK.w + 0.1, SOLID_H.desk)); // rotated desk
     out.push(rect(QA_LAB.x - 0.8, z, 0.6, 0.7, SOLID_H.seated)); // chair + tester
   }
-  out.push(rect(0, -HALF_D + 0.25, BOARD.w + 0.4, 0.5, SOLID_H.board)); // whiteboard + marker tray
-  const a = APP_SCREEN;
-  out.push(rect(a.x, -HALF_D + a.depth / 2, a.w + a.bezel * 2, a.depth, a.y + a.h / 2 + a.bezel)); // app monitor, up to its top bezel
-  out.push(rect(-HALF_W + 0.9, 6.5, 1.1, 3.2, SOLID_H.couch)); // couch
-  out.push(rect(-HALF_W + 2.6, 6.5, 0.9, 1.4, SOLID_H.coffeeTable)); // coffee table
-  out.push(blasterRack(BLASTER_RACK.officeX));
-  out.push(jukeboxRect(JUKEBOX.officeX));
-  out.push(gongRect());
-  out.push(pongTableRect());
-  out.push(rect(HALF_W - 0.45, 7.4, 0.9, 5, SOLID_H.kitchen)); // kitchenette counter + fridge
-  out.push(rect(HALF_W - 0.5, -9.5, 0.7, 0.7, SOLID_H.cooler)); // water cooler
-  out.push(decorBoxRect());
+  out.push(...Object.values(officeAnchors()));
+  if (style !== 'classic') out.push(styleFeatureRect());
   return out;
 }
 
@@ -404,7 +549,7 @@ const DESK_CORNER = { x: 0.74, z: -0.3 };
 export const DESK_TOP = 0.77;
 
 /** Every slot on a floor kind. Office floors all share the same ones. */
-export function decorSlots(kind: FloorKind): DecorSlot[] {
+export function decorSlots(kind: FloorKind, layout: FloorLayout = active.layout): DecorSlot[] {
   const c = 0.02;
   const corners: DecorSlot[] = [
     { id: 'corner-nw', x: -HALF_W + c, y: WALL_H, z: -HALF_D + c, rotY: 0 },
@@ -415,9 +560,10 @@ export function decorSlots(kind: FloorKind): DecorSlot[] {
   // Either side of the elevator's frame, against the south wall.
   const elevator: DecorSlot[] = [-1, 1].map((s) => ({ id: s < 0 ? 'elevator-w' : 'elevator-e', x: s * (ELEVATOR.doorHalf + 0.95), y: 0, z: HALF_D - 0.4, rotY: Math.PI, floor: true }));
   if (kind === 'office') {
+    // Desks turn with their layout, and the corner with them.
     const desks = Array.from({ length: MAX_DESKS }, (_, s): DecorSlot => {
-      const { x, z } = deskPosition(s);
-      return { id: `desk-${s}`, x: x + DESK_CORNER.x, y: DESK_TOP, z: z + DESK_CORNER.z, rotY: 0 };
+      const d = deskPlace(s, layout);
+      return { id: `desk-${s}`, ...deskPoint(d, DESK_CORNER.x, DESK_CORNER.z), y: DESK_TOP, rotY: d.rotY };
     });
     // QA desks are turned to face the east wall (QA_ROTATION), so the corner turns with them.
     const qa = QA_LAB.stations.map((_, s): DecorSlot => {
@@ -557,22 +703,26 @@ export function roofColliders(): Rect[] {
 
 // ---------- what's underfoot ----------
 
-export type Surface = 'wood' | 'rug' | 'lobby' | 'cabin';
+/** wood: planks · rug: rugs and carpet · lobby: hard tiles, paving, a glossy floor · concrete · cabin: the elevator's steel. */
+export type Surface = 'wood' | 'rug' | 'lobby' | 'concrete' | 'cabin';
 
-const OFFICE_RUGS: Rect[] = [...DESK_RUGS, QA_RUG];
+/** What each style's office floor is, between the rugs. */
+export const STYLE_FLOOR: Record<FloorStyle, Surface> = { classic: 'wood', loft: 'concrete', scandi: 'wood', neon: 'lobby', greenhouse: 'lobby', library: 'rug' };
+
+const OFFICE_RUGS = Object.fromEntries(Object.entries(LAYOUTS).map(([id, plan]) => [id, [...plan.rugs, QA_RUG]])) as Record<FloorLayout, Rect[]>;
 const LOBBY_RUGS: Rect[] = [LOBBY_RUG, MANAGER_ROOM, CEO_ROOM];
 
 /** The floor under (x, z), for footsteps. A rug's edge counts as rug; past the doorway is the elevator cabin, and
  * outside, a balcony's (or the patio's) paving sounds like the lobby's tiles. On the roof, the decking is wood and
- * the rest is paving. */
-export function surfaceAt(floor: 'office' | 'lobby' | 'roof', x: number, z: number): Surface {
+ * the rest is paving. An office floor's rugs and floor are its layout's and style's (the floor on screen's by default). */
+export function surfaceAt(floor: 'office' | 'lobby' | 'roof', x: number, z: number, look: { layout: FloorLayout; style: FloorStyle } = active): Surface {
   if (z > HALF_D && Math.abs(x) <= ELEVATOR.cabinHalf) return 'cabin';
   if (floor === 'roof') return x >= DECKING.minX && x <= DECKING.maxX && z >= DECKING.minZ && z <= DECKING.maxZ ? 'wood' : 'lobby';
   if (Math.abs(x) > HALF_W) return 'lobby';
-  for (const r of floor === 'lobby' ? LOBBY_RUGS : OFFICE_RUGS) {
+  for (const r of floor === 'lobby' ? LOBBY_RUGS : OFFICE_RUGS[look.layout]) {
     if (x >= r.minX && x <= r.maxX && z >= r.minZ && z <= r.maxZ) return 'rug';
   }
-  return floor === 'lobby' ? 'lobby' : 'wood';
+  return floor === 'lobby' ? 'lobby' : STYLE_FLOOR[look.style];
 }
 
 /** Push a circle out of any rects it overlaps (cheap, axis-separated). */

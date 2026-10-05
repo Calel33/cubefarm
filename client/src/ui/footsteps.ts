@@ -34,6 +34,12 @@ const VOICES: Record<Surface, (s: Step) => void> = {
     noise({ dur: 0.05 * d, peak: 0.016 * v, freq: 900 * f, q: 0.8, attack: 0.002, ...o });
     tone({ freq: 520 * p, to: 380 * p, type: 'triangle', dur: 0.03 * d, peak: 0.007 * v, attack: 0.002, ...o });
   },
+  // A flat, dead thud with a gritty scrape: no ring, no hollow (the loft's concrete).
+  concrete: ({ p, v, f, d, o }) => {
+    tone({ freq: 120 * p, to: 75 * p, dur: 0.05 * d, peak: 0.022 * v, attack: 0.002, ...o });
+    noise({ dur: 0.05 * d, peak: 0.024 * v, filter: 'bandpass', freq: 1700 * f, q: 0.9, attack: 0.002, ...o });
+    noise({ at: 0.035 * d, dur: 0.06 * d, peak: 0.01 * v, filter: 'bandpass', freq: 3200 * f, to: 2200 * f, q: 1.1, attack: 0.004, ...o });
+  },
   // A dull metallic tonk: two inharmonic partials ring briefly over the elevator's steel floor.
   cabin: ({ p, v, f, d, o }) => {
     tone({ freq: 196 * p, to: 186 * p, type: 'triangle', dur: 0.18 * d, peak: 0.018 * v, attack: 0.003, ...o });
@@ -43,7 +49,7 @@ const VOICES: Record<Surface, (s: Step) => void> = {
 };
 
 // How bright a scuff sounds on each surface.
-const SCUFF: Record<Surface, number> = { wood: 1, rug: 0.55, lobby: 1.4, cabin: 0.85 };
+const SCUFF: Record<Surface, number> = { wood: 1, rug: 0.55, lobby: 1.4, concrete: 1.6, cabin: 0.85 };
 
 const own: PlaceOpts = { group: 'steps', pan: 0 };
 const step: Step = { p: 1, v: 1, f: 1, d: 1, o: own };
