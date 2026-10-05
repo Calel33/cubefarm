@@ -336,10 +336,10 @@ export interface SwarmSettings {
 export type NotifyEvent = 'needsHuman' | 'ceoMessage' | 'hire' | 'agentError' | 'usage' | 'merge';
 
 /** Where it tells them: this browser, Web Push to their devices, or a chat app's webhook. */
-export type NotifyChannel = 'desktop' | 'push' | 'discord' | 'slack' | 'telegram' | 'ntfy';
+export type NotifyChannel = 'desktop' | 'push' | 'ntfy';
 
 /** The chat apps, whose webhook URLs and tokens live in the server's secrets file. */
-export type NotifyWebhook = 'discord' | 'slack' | 'telegram' | 'ntfy';
+export type NotifyWebhook = 'ntfy';
 
 export interface NotifySettings {
   events: Record<NotifyEvent, boolean>;
@@ -472,6 +472,22 @@ export interface OpsView {
   alarms: OpsAlarm[];
 }
 
+/** What the office doctor's one-click fixes do (#262): the console's own actions, nothing new. */
+export type DoctorFix = 'clear' | 'stop' | 'requeue' | 'retry-qa' | 'send-back' | 'close-issue';
+
+/** Something stuck the watchdog has no safe remedy for, or already remedied within the hour (server/watchdog.ts). */
+export interface DoctorFinding {
+  id: string; // stable while the problem lasts
+  kind: 'quiet' | 'preparing' | 'stale' | 'qa-orphan' | 'fix-orphan' | 'unclosed';
+  repoId: string;
+  agentId: string | null;
+  prNumber: number | null;
+  issueNumber: number | null;
+  text: string;
+  fixes: DoctorFix[];
+  since: number;
+}
+
 /**
  * Where the office's own update stands. none: up to date · available: new commits on GitHub · waiting / draining:
  * starting nothing new while running sessions finish · updating: handed to the launcher · failed: see detail.
@@ -557,10 +573,12 @@ export interface WorldSnapshot {
   ceo: CeoInfo;
   messages: PhoneMessage[];
   phoneReadAt: number; // CEO messages newer than this are unread
+  version?: string; // the cubefarm version the server runs (package.json)
   officeCommit?: string | null; // short sha the server started on (absent on servers without self-update)
   officeUpdate?: OfficeUpdateView;
   usage: UsageView;
   ops: OpsView;
+  doctor?: DoctorFinding[]; // the office doctor's findings the manager hasn't ignored
   clis: CliView[];
   voiceKeySet: boolean; // an ElevenLabs key is saved (the key itself never leaves the server)
   voiceKeyHint: string; // its last 4 characters, '' when none
@@ -605,6 +623,7 @@ export type ServerEvent =
   | { type: 'officeUpdate'; officeUpdate: OfficeUpdateView }
   | { type: 'usage'; usage: UsageView }
   | { type: 'ops'; ops: OpsView }
+  | { type: 'doctor'; doctor: DoctorFinding[] }
   | { type: 'clis'; clis: CliView[] }
   | { type: 'voiceKey'; voiceKeySet: boolean; voiceKeyHint: string }
   | { type: 'voiceCache'; voiceCache: VoiceCacheView }
