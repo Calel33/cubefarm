@@ -6,7 +6,7 @@ import type { Backend, DemoHire } from './backend.ts';
 import type { PreviewBackend } from './previewRunner.ts';
 import { describeOfficeTool, type LogEntry, type SessionCallbacks, type SessionHandle, type SessionOptions } from './agentRunner.ts';
 import { CLIS } from './clis.ts';
-import type { GhRepoSummary, IssueInfo, PullInfo } from '../shared/types.ts';
+import type { GhRepoSummary, IssueInfo, PullInfo, RipIssue } from '../shared/types.ts';
 import type { LocalFolder } from './workspace.ts';
 import { HOME_DIR, type DemoScale } from './config.ts';
 import { DAY_MS, emptyHistory, HOUR_MS, prune, startOfDay, type OpsHistory } from './metrics.ts';
@@ -38,6 +38,8 @@ const repos = new Map<string, FakeRepo>();
 const bareRepos = new Set<string>();
 const mergedSinceSync = new Map<string, number>(); // merges the fake project folder hasn't pulled yet
 const closedIssues = new Set<string>(); // `${fullName}#${n}`: issues closed by a merge
+// Issues closed as not planned, newest first: every demo repo starts with one gravestone in the lobby.
+const notPlanned = new Map<string, RipIssue[]>();
 
 const fakeSha = () => crypto.randomBytes(20).toString('hex');
 
@@ -656,9 +658,12 @@ export function createDemoBackend(scale: DemoScale | null = null): Backend {
         r.issues = r.issues.filter((i) => !pr.closesIssues.includes(i.number));
       }, 20_000).unref();
     },
-    closeIssue: async (fullName, number) => {
+    listNotPlanned: async (fullName) => notPlanned.get(fullName) ?? [{ number: 1, title: 'Rewrite everything in a weekend' }],
+    closeIssue: async (fullName, number, _comment, reason) => {
       const r = repos.get(fullName);
-      if (!r?.issues.some((i) => i.number === number)) throw new Error(`Issue #${number} is not open`);
+      const closing = r?.issues.find((i) => i.number === number);
+      if (!r || !closing) throw new Error(`Issue #${number} is not open`);
+      if (reason === 'not planned') notPlanned.set(fullName, [{ number, title: closing.title }, ...(notPlanned.get(fullName) ?? [])].slice(0, 8));
       closedIssues.add(`${fullName}#${number}`);
       r.issues = r.issues.filter((i) => i.number !== number);
     },

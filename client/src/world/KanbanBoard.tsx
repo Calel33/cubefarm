@@ -14,6 +14,7 @@ import { BOARD_TEX, dependencyPairs } from './whiteboard';
 import { useA11y } from '../ui/a11y';
 import { showsShapes } from '../ui/a11yPrefs';
 import { officeNow } from '../officeTime';
+import { PiSticker } from './secrets/PiSticker';
 
 export function KanbanBoard({ repo, agents }: { repo: RepoView; agents: Agent[] }) {
   const qa = useStore((s) => s.qa);
@@ -68,6 +69,7 @@ export function KanbanBoard({ repo, agents }: { repo: RepoView; agents: Agent[] 
           <meshBasicMaterial map={tex} toneMapped={false} />
         </mesh>
         <Box size={[3.2, 0.05, 0.16]} position={[3.5, BOARD.y - 0.12, 0.1]} color="#aab4c3" outline />
+        <PiSticker position={[BOARD.w / 2 - 0.45, BOARD.y + BOARD.h - 0.4, 0.075]} />
         {['#e63946', '#1d3557', '#2a9d8f'].map((c, i) => (
           <Cyl key={c} r={0.018} h={0.16} position={[2.6 + i * 0.22, BOARD.y - 0.075, 0.12]} rotation={[0, 0, Math.PI / 2]} color={c} />
         ))}

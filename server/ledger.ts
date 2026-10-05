@@ -18,6 +18,7 @@ import {
   stored,
   type AchievementId,
   type AchievementView,
+  type SecretAchievementId,
   type DecorItem,
   type FloorProgressView,
   type ProgressView,
@@ -80,6 +81,8 @@ export type LedgerEvent =
   | { kind: 'listed'; repoId: string; numbers: number[]; at: number }
   | { kind: 'session'; agentId: string; key: string; costUsd: number; turns: number }
   | { kind: 'coffee'; id: string; at: number }
+  /** The player found a secret (#266): the duck hunt, the secret room or an easter egg. */
+  | { kind: 'secret'; id: SecretAchievementId; detail: string; at: number }
   | { kind: 'full-house'; repoName: string; people: number; at: number }
   | { kind: 'tick'; at: number };
 
@@ -274,6 +277,10 @@ export function apply(s: LedgerState, ev: LedgerEvent): Effects {
       if (s.coffees >= COFFEE_ADDICT) unlock(s, out, 'coffee-addict', `${s.coffees} coffees`, ev.at);
       break;
     }
+    case 'secret':
+      unlock(s, out, ev.id, ev.detail, ev.at);
+      out.changed ||= out.unlocked.length > 0;
+      break;
     case 'full-house':
       unlock(s, out, 'full-house', `${ev.people} people busy on ${ev.repoName}`, ev.at);
       out.changed ||= out.unlocked.length > 0;

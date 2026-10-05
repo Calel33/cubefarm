@@ -21,7 +21,7 @@ import { emitReward } from './world/decor/rewards';
 
 export type Agent = Omit<AgentView, 'log'>;
 
-export type PhoneTab = 'chat' | 'hires' | 'company' | 'games';
+export type PhoneTab = 'chat' | 'hires' | 'company' | 'games' | 'secrets';
 
 export type Overlay =
   | { kind: 'terminal'; agentId: string }
@@ -66,7 +66,9 @@ export interface Focus {
     /** E on a holiday theme's thing (themes/active.ts). */
     | { kind: 'theme'; id: string }
     /** Pick up a paddle at that end of the ping-pong table (toys/pongState.ts). */
-    | { kind: 'pong'; end: 'west' | 'east' };
+    | { kind: 'pong'; end: 'west' | 'east' }
+    /** The secrets (#266, world/secrets): pick up a duck, pull the odd book, the secret room's arcade and plaque, a gravestone. */
+    | { kind: 'secret'; op: 'duck' | 'book' | 'arcade' | 'plaque' | 'grave'; id?: string };
 }
 
 /** What the player is carrying. Other items (a blaster, say) join the union with their own kind. */

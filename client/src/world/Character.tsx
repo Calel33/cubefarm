@@ -28,6 +28,7 @@ import { Zzz } from './Zzz';
 import { cheerVoice } from '../ui/cheerRules';
 import { cheerFrom } from '../ui/cheerSfx';
 import { hearBody, hearing } from '../ui/peopleSounds';
+import { discoOn, wavingBack } from './secrets/secretsState';
 
 // A cartoon developer. Origin is the floor under the chair; they face -Z (toward the desk). Seated by default; the
 // people controller (people.ts, body.ts) can get them up, walk them about and sit them back down. `children` (the
@@ -328,7 +329,7 @@ export function Character({
     const dt = Math.min(delta, 0.1);
     const now = performance.now();
     const t = now / 1000 + seed;
-    const party = isCelebrating(agent.repoId, now); // a PR on this floor just merged: everyone cheers, busy or not
+    const party = isCelebrating(agent.repoId, now) || discoOn(now); // a PR on this floor just merged (or disco mode, #266): everyone cheers, busy or not
     if (party && !voice.party && head.current) {
       // the arms go up: a "woo!" from their head
       head.current.getWorldPosition(voice.head);
@@ -413,7 +414,7 @@ export function Character({
 
     // ---------- the seated pose ----------
     const busy = agent.status === 'working' || agent.status === 'preparing';
-    const cheering = party || (agent.status === 'done' && agent.endedAt != null && Date.now() - agent.endedAt < 7000);
+    const cheering = party || wavingBack(agent.id, now) || (agent.status === 'done' && agent.endedAt != null && Date.now() - agent.endedAt < 7000);
     const name: PoseName = party ? 'cheer' : poseFor(agent.status, agent.currentTool, lastTool.current.name, now - lastTool.current.at, cheering);
     const target = POSES[name];
     const c = cur.current;

@@ -80,6 +80,7 @@ export interface RepoView {
   issues: IssueInfo[]; // open issues
   pulls: PullInfo[]; // open + recently merged PRs
   held: { issue: number; pr: number }[]; // open issues whose PR was closed: they wait to be assigned by hand
+  rip?: RipIssue[]; // the latest issues closed as not planned: the lobby's gravestones (#266)
   lastSync: number | null;
   syncError?: string;
   previewConfig: PreviewConfig;
@@ -90,6 +91,12 @@ export interface RepoView {
  * How a floor's app is run for the preview monitor. {port} and {tmp} are replaced in the command and env values;
  * PORT={port} is always set. command null: npm run dev, else start, else preview from package.json.
  */
+/** An issue closed as not planned, remembered by a gravestone in the lobby. */
+export interface RipIssue {
+  number: number;
+  title: string;
+}
+
 export interface PreviewConfig {
   command: string | null;
   env: Record<string, string>;

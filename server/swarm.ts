@@ -48,7 +48,7 @@ import { WeatherService } from './weather.ts';
 import { blockers, holdUps, issueSpecialty, waitsMessage } from '../shared/issues.ts';
 import { dayKey, journalFrame } from '../shared/journal.ts';
 import { cleanStyle, HAIR_COLORS, SKIN_TONES, type AgentStyle } from '../shared/looks.ts';
-import { achievementDef, type ProgressView } from '../shared/progress.ts';
+import { achievementDef, isSecretAchievement, type ProgressView } from '../shared/progress.ts';
 import { parsePongResult, PONG_PLAYER, recordGame } from '../shared/pong.ts';
 import { effectiveModel } from '../shared/models.ts';
 import { DEFAULT_WEATHER, DEFAULT_WORLD_EVENTS, weatherSettings, worldEventSettings } from '../shared/outside.ts';
@@ -82,6 +82,7 @@ import type {
   QaCheck,
   QaView,
   RepoView,
+  RipIssue,
   ServerEvent,
   SwarmSettings,
   UsageView,
@@ -243,7 +244,12 @@ interface RepoRuntime {
   closedIssues: Map<number, number>; // issues the office learned are closed, and when (closeCleanup.ts)
   closedPulls: Map<number, LearnedPull>; // PRs it learned are closed or merged
   openAt: Map<string, number>; // `issue#<n>` / `pr#<n>` -> when GitHub said one the sync doesn't list is open
+  rip?: RipIssue[]; // issues closed as not planned: the lobby's gravestones
+  ripAt?: number; // when they were last asked for (every RIP_EVERY_MS at most)
 }
+
+/** How often a sync asks GitHub for the issues closed as not planned (#266): they change rarely. */
+const RIP_EVERY_MS = 30 * 60_000;
 
 interface QaReport {
   verdict: 'pass' | 'fail';
@@ -865,6 +871,7 @@ export class Swarm {
       issues: rt.issues,
       pulls: rt.pulls,
       held: this.state.held.filter((h) => h.repoId === r.id).map((h) => ({ issue: h.issue, pr: h.pr })),
+      rip: rt.rip ?? [],
       lastSync: rt.lastSync,
       syncError: rt.syncError,
       previewConfig: r.preview,
@@ -1594,6 +1601,7 @@ export class Swarm {
       this.issueAges.learn(repo.id, issues);
       this.issueAges.stamp(repo.id, pulls);
       void this.lookUpIssueAges(repo);
+      void this.lookUpRip(repo, rt);
       rt.lastSync = Date.now();
       rt.fetchedAt = started;
       rt.syncError = undefined;
@@ -1617,6 +1625,16 @@ export class Swarm {
       rt.syncing = false;
     }
     if (this.repoRt.has(id)) this.emitRepo(repo);
+  }
+
+  /** The issues closed as not planned, now and then (the lobby's gravestones); a failed look keeps the last ones. */
+  private async lookUpRip(repo: PersistedRepo, rt: RepoRuntime) {
+    if (Date.now() - (rt.ripAt ?? 0) < RIP_EVERY_MS) return;
+    rt.ripAt = Date.now();
+    const rip = await this.backend.listNotPlanned(repo.fullName).catch(() => null);
+    if (!rip || !this.repoRt.has(repo.id) || JSON.stringify(rip) === JSON.stringify(rt.rip ?? [])) return;
+    rt.rip = rip;
+    this.emitRepo(repo);
   }
 
   /** When the issues behind the day's merges were filed, if the office never saw them open (e.g. after a restart). */
@@ -4105,6 +4123,13 @@ export class Swarm {
     if (typeof id !== 'string' || !/^[\w-]{4,80}$/.test(id)) throw new HttpError(400, 'A coffee needs an id');
     this.ledger({ kind: 'coffee', id, at: Date.now() });
     return { coffees: this.state.progress.coffees };
+  }
+
+  /** The player found a secret (#266): the duck hunt, the secret room or an easter egg unlocks its achievement. */
+  foundSecret(id: unknown) {
+    if (!isSecretAchievement(id)) throw new HttpError(400, `Unknown secret: ${String(id)}`);
+    this.ledger({ kind: 'secret', id, detail: 'found by the manager', at: Date.now() });
+    return { ok: true };
   }
 
   /** Demo only, for QA: coins for a floor (`coins`), or more time on the team (`tenure`, everyone without an agent id). */

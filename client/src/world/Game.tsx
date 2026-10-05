@@ -30,6 +30,9 @@ import { decorColliders } from './themes/themes';
 import { TypingSounds } from './TypingSounds';
 import { Weather } from './weather/Weather';
 import { WorldEvents } from './events/WorldEvents';
+import { Secrets } from './secrets/Secrets';
+import { withSecretRoom } from './secrets/room';
+import { useSecrets } from './secrets/secretsState';
 
 // The roof is its own chunk: fetched as the elevator heads up there, never by a floor that doesn't go.
 const loadRoof = () => import('./roof/Roof');
@@ -80,12 +83,13 @@ export function Game() {
   const top = useStore((s) => s.repos.reduce((m, r) => Math.max(m, r.floor), 0));
   const placed = useStore((s) => (repo ? s.progress.floors[repo.id]?.placed : undefined));
   const theme = useTheme((s) => s.id);
+  const secretOpen = useSecrets((s) => s.open);
   const colliders = useMemo(
     () =>
       onRoof
         ? roofColliders()
-        : [...(isOffice ? [...officeColliders(), ...decorRects(placed ?? {})] : lobbyColliders()), ...decorColliders(theme, isOffice ? 'office' : 'lobby')],
-    [onRoof, isOffice, placed, theme],
+        : [...(isOffice ? [...officeColliders(), ...decorRects(placed ?? {})] : withSecretRoom(lobbyColliders(), secretOpen)), ...decorColliders(theme, isOffice ? 'office' : 'lobby')],
+    [onRoof, isOffice, placed, theme, secretOpen],
   );
   const toRoof = useStore((s) => s.travel?.to === ROOF);
   useEffect(() => {
@@ -127,6 +131,7 @@ export function Game() {
       <ThemeLayer key={onRoof ? ROOF : isOffice ? floor : 0} kind={onRoof ? 'roof' : isOffice ? 'office' : 'lobby'} floor={onRoof ? ROOF : isOffice ? floor : 0} top={top} repoId={repo?.id ?? null} />
       <Player colliders={colliders} floor={floor} />
       <Presence />
+      <Secrets kind={onRoof ? 'roof' : isOffice ? 'office' : 'lobby'} />
       <FieldOfView />
       <CameraRig />
       <Travel />

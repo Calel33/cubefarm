@@ -138,6 +138,7 @@ export const api = {
   buyDecor: (repoId: string, item: DecorItem) => call<ProgressView>('POST', `${r(repoId)}/decor/buy`, { item }),
   placeDecor: (repoId: string, body: { item: DecorItem; slot: string | null; from: string | null }) => call<ProgressView>('POST', `${r(repoId)}/decor/place`, body),
   drankCoffee: (id: string) => call<{ coffees: number }>('POST', '/api/progress/coffee', { id }, false),
+  foundSecret: (id: string) => call<{ ok: boolean }>('POST', '/api/progress/secret', { id }, false),
   /** Demo only: coins for a floor, or days of tenure for one agent (or everyone). */
   demoProgress: (body: { action: 'coins'; repoId: string; coins: number } | { action: 'tenure'; days: number; agentId?: string }) => call<ProgressView>('POST', '/api/progress/demo', body),
 };

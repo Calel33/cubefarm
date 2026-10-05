@@ -1,5 +1,5 @@
 import { gh, ghJson } from './exec.ts';
-import type { GhRepoSummary, IssueInfo, PullInfo } from '../shared/types.ts';
+import type { GhRepoSummary, IssueInfo, PullInfo, RipIssue } from '../shared/types.ts';
 
 // All GitHub access goes through the gh CLI so it reuses the user's existing `gh auth login`.
 
@@ -45,6 +45,12 @@ export async function listIssues(fullName: string): Promise<IssueInfo[]> {
   return raw
     .map((i) => ({ number: i.number, title: i.title, body: i.body ?? '', url: i.url, labels: i.labels.map((l) => l.name), createdAt: i.createdAt }))
     .sort((a, b) => a.number - b.number);
+}
+
+/** The latest issues closed as not planned (newest first), for the lobby's gravestones. */
+export async function listNotPlanned(fullName: string): Promise<RipIssue[]> {
+  const raw = await ghJson<{ number: number; title: string }[]>(['issue', 'list', '-R', fullName, '--state', 'closed', '--search', 'reason:"not planned"', '--limit', '8', '--json', 'number,title']);
+  return raw.map((i) => ({ number: i.number, title: i.title }));
 }
 
 interface RawPull {

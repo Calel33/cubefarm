@@ -15,6 +15,7 @@ import { RoofPeople } from './RoofPeople';
 import { mountRoof } from './roofState';
 import { StringLights } from './StringLights';
 import { Telescope } from './Telescope';
+import { Ducks } from '../secrets/HiddenDucks';
 
 // The roof terrace, the elevator's top stop (layout.ts has its numbers and colliders): a garden along the north
 // parapet, a decking lounge with deck chairs under string lights, a barbecue, a telescope over the city and the stars,
@@ -35,6 +36,7 @@ export default function Roof({ top }: { top: number }) {
       <RoofDeck top={top} />
       <Elevator floorLabel="▲ R · Roof terrace" accent="#ff8a5b" />
       <Garden />
+      <Ducks place="roof" />
       <StringLights />
       <DeckChairs />
       <Grill />

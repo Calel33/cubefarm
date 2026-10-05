@@ -35,6 +35,7 @@ import { leavePerch, perch, takePerchTurn, type Perch } from './perch';
 import { roofAction } from './roof/roofState';
 import { greet } from './Chatter';
 import { joinPong, pongCamera, pongMouse, tickPaddle } from './toys/pongState';
+import { saidHello, secretAction } from './secrets/actions';
 
 /** How fast the right stick moves the ping-pong paddle, full over (in mouse pixels a second). */
 const PAD_PADDLE = 600;
@@ -118,6 +119,10 @@ export function runFocusAction(focus: Focus, via: 'key' | 'click' = 'key') {
     roofAction(focus.action.op);
     return;
   }
+  if (focus.action.kind === 'secret') {
+    secretAction(focus.action);
+    return;
+  }
   if (focus.action.kind === 'channel') {
     tuneChannel(focus.action.repoId, focus.action.pr);
     return;
@@ -127,7 +132,7 @@ export function runFocusAction(focus: Focus, via: 'key' | 'click' = 'key') {
     return;
   }
   if (focus.action.kind === 'greet') {
-    greet(focus.action.agentId);
+    if (greet(focus.action.agentId)) saidHello(focus.action.agentId);
     return;
   }
   if (focus.action.kind === 'hire') {

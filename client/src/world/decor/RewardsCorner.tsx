@@ -61,7 +61,7 @@ export function Kiosk() {
 // ---------- the trophy shelf ----------
 
 const COLS = 5;
-const ROWS_Y = [1.66, 1.06, 0.46]; // shelf boards' tops, top shelf first
+const ROWS_Y = [1.76, 1.3, 0.84, 0.38]; // shelf boards' tops, top shelf first: room for every achievement (shared/progress.ts)
 const S = TROPHY_SHELF;
 
 /** Where trophy `i` (its achievement's place in ACHIEVEMENTS) stands on the shelf, in the shelf's frame. */

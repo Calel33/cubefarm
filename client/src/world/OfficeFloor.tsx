@@ -28,6 +28,7 @@ import { OfficeRituals } from './Rituals';
 import { PongTable } from './PongTable';
 import { Shell } from './Shell';
 import { Toys } from './toys';
+import { Ducks } from './secrets/HiddenDucks';
 
 export function WallSign({
   position,
@@ -110,6 +111,7 @@ export const OfficeFloor = memo(function OfficeFloor({ repo }: { repo: RepoView 
       <PongTable repoId={repo.id} />
       <Elevator floorLabel={`▲ ${repo.floor} · ${name}`} accent={repo.color} />
       <Toys floor="office" />
+      <Ducks place="office" />
       <ErrandDirector floor="office" agents={agents} leavers={leavers} onGone={gone} repoId={repo.id} />
       <OfficeRituals repo={repo} agents={agents} />
       {leavers.map((a) => (

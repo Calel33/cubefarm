@@ -13,7 +13,7 @@ import { openMeteo, type WeatherApi } from './weather.ts';
 import type { AgentTerminal } from './terminal.ts';
 import type { OpsHistory } from './metrics.ts';
 import type { UsageWarning } from './pacing.ts';
-import type { CliView, GhRepoSummary, IssueInfo, PullInfo } from '../shared/types.ts';
+import type { CliView, GhRepoSummary, IssueInfo, PullInfo, RipIssue } from '../shared/types.ts';
 
 /** A made-up candidate the demo CEO proposes: the propose_hire tool's arguments, bar the floor and role. */
 export interface DemoHire {
@@ -33,6 +33,8 @@ export interface Backend {
   repoMeta(fullName: string): Promise<github.RepoMeta>;
   listIssues(fullName: string): Promise<IssueInfo[]>;
   listPulls(fullName: string): Promise<PullInfo[]>;
+  /** The latest issues closed as not planned, newest first (the lobby's gravestones). */
+  listNotPlanned(fullName: string): Promise<RipIssue[]>;
   createIssue(fullName: string, title: string, body: string, labels?: string[]): Promise<number>;
   /** OPEN or CLOSED; null when there is no such issue. */
   issueState(fullName: string, number: number): Promise<'OPEN' | 'CLOSED' | null>;
@@ -112,6 +114,7 @@ export const realBackend: Backend = {
   repoMeta: github.repoMeta,
   listIssues: github.listIssues,
   listPulls: github.listPulls,
+  listNotPlanned: github.listNotPlanned,
   createIssue: github.createIssue,
   issueState: github.issueState,
   editIssue: github.editIssue,

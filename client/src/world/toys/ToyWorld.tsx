@@ -26,6 +26,7 @@ import { npcHoldPoint, npcView, type NpcAim } from './npcAim';
 import { setToySource } from './probe';
 import { Roomba } from './Roomba';
 import { HOLD, THROW, holdPoint, hoopShot, throwVelocity, type HoopAim, type View } from './throwing';
+import { ballOnGong } from '../secrets/actions';
 
 // Loaded lazily by ./index.tsx, so Rapier stays out of the main bundle.
 
@@ -526,6 +527,7 @@ function Balls({ floor }: { floor: ToyFloor }) {
         if (part === 'rim') rimClank({ x: rim.x, y: rim.y, z: rim.z }, level);
         else if (part === 'board') boardThud(p, level);
         else bounce(defs[i].kind, p, level);
+        ballOnGong(p, defs[i].r, Math.hypot(lv.x, lv.y, lv.z) * STEP); // a good throw rings the gong (#266)
       }
     },
     [before, defs, rim],

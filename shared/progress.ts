@@ -88,7 +88,13 @@ export type AchievementId =
   | 'quarter-century'
   | 'century'
   | 'interior-designer'
-  | 'fully-furnished';
+  | 'fully-furnished'
+  | SecretAchievementId;
+
+/** Achievements the player's browser reports (#266): the duck hunt, the secret room and the easter eggs. */
+export const SECRET_ACHIEVEMENTS = ['duck-hunter', 'secret-room', 'disco-fever', 'butterfingers', 'fan-club', 'gong-shot', 'pi-time'] as const;
+export type SecretAchievementId = (typeof SECRET_ACHIEVEMENTS)[number];
+export const isSecretAchievement = (id: unknown): id is SecretAchievementId => typeof id === 'string' && (SECRET_ACHIEVEMENTS as readonly string[]).includes(id);
 
 export interface AchievementDef {
   id: AchievementId;
@@ -112,6 +118,13 @@ export const ACHIEVEMENTS: readonly AchievementDef[] = [
   { id: 'century', name: 'Century', icon: '🥇', blurb: '100 PRs merged' },
   { id: 'interior-designer', name: 'Interior designer', icon: '🪴', blurb: 'The first decoration placed' },
   { id: 'fully-furnished', name: 'Fully furnished', icon: '🛋️', blurb: 'Every decoration slot on a floor filled' },
+  { id: 'duck-hunter', name: 'Duck hunter', icon: '🦆', blurb: 'All twenty rubber ducks found' },
+  { id: 'secret-room', name: 'Bookworm', icon: '📕', blurb: 'The secret room behind the bookshelf opened' },
+  { id: 'disco-fever', name: 'Disco fever', icon: '🪩', blurb: '↑↑↓↓←→←→BA' },
+  { id: 'butterfingers', name: 'Butterfingers', icon: '☕', blurb: 'Coffee spilled on the manager’s console' },
+  { id: 'fan-club', name: 'Fan club', icon: '👋', blurb: 'The CEO waved back' },
+  { id: 'gong-shot', name: 'Gong shot', icon: '🥁', blurb: 'A thrown ball rang the merge gong' },
+  { id: 'pi-time', name: 'Pi time', icon: 'π', blurb: 'At an office floor at 3:14 pm' },
 ];
 
 export const achievementDef = (id: string) => ACHIEVEMENTS.find((a) => a.id === id);

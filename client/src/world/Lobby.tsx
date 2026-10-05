@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { lazy, Suspense, useMemo } from 'react';
 import * as THREE from 'three';
 import { floorPrCounts, pendingRequests, useStore } from '../store';
 import { useKeyName } from '../ui/controls';
@@ -22,6 +22,14 @@ import { Shell } from './Shell';
 import { TimeLapseScreen } from './TimeLapseScreen';
 import { Ball, Box, Cyl } from './Toon';
 import { Toys } from './toys';
+import { Ducks } from './secrets/HiddenDucks';
+import { Graveyard } from './secrets/Graveyard';
+import { SecretBookshelf } from './secrets/SecretBookshelf';
+import { SECRET_DOOR } from './secrets/room';
+import { useSecrets } from './secrets/secretsState';
+
+// The secret room behind the bookshelf (#266) is its own chunk, fetched the first time the bookshelf opens.
+const SecretRoom = lazy(() => import('./secrets/SecretRoom'));
 
 const ACCENT = '#ff8a5b';
 const CEO_ACCENT = '#9b5de5';
@@ -115,7 +123,7 @@ function ManagerComputer() {
         <meshBasicMaterial map={tex} toneMapped={false} />
       </mesh>
       <Box size={[0.5, 0.025, 0.16]} position={[0, 0.815, 0.25]} color="#f4f4f8" outline />
-      <Cyl r={0.05} h={0.11} position={[0.9, 0.855, 0.1]} color="#ffd166" outline />
+      <ManagerMug />
       <Box size={[0.3, 0.2, 0.03]} position={[-0.95, 0.9, -0.1]} rotation={[-0.3, 0.3, 0]} color="#e9c46a" outline />
       {/* manager chair (yours) */}
       <group position={[0, 0, -1.1]}>
@@ -125,6 +133,19 @@ function ManagerComputer() {
         <Cyl r={0.3} h={0.04} position={[0, 0.03, 0]} color="#6c757d" />
       </group>
     </group>
+  );
+}
+
+/** The manager's mug: typing "coffee" on the console knocks it over (#266), and the coffee spreads over the desk. */
+function ManagerMug() {
+  const spilled = useSecrets((s) => s.spill);
+  if (!spilled) return <Cyl r={0.05} h={0.11} position={[0.9, 0.855, 0.1]} color="#ffd166" outline />;
+  return (
+    <>
+      <Cyl r={0.05} h={0.11} position={[0.86, 0.85, 0.12]} rotation={[0, 0, Math.PI / 2]} color="#ffd166" outline />
+      <Cyl r={0.24} h={0.008} position={[0.62, 0.804, 0.16]} color="#6f4e37" shadow={false} />
+      <Cyl r={0.12} h={0.008} position={[0.36, 0.804, 0.24]} color="#6f4e37" shadow={false} />
+    </>
   );
 }
 
@@ -292,9 +313,10 @@ export function Lobby() {
   const managerName = useStore((s) => s.settings.managerName);
   const company = useStore((s) => s.settings.companyName);
   const boss = managerName || user;
+  const secretOpen = useSecrets((s) => s.open);
   return (
     <group>
-      <Shell kind="lobby" accent={ACCENT} floorColor="#e2c7a3" />
+      <Shell kind="lobby" accent={ACCENT} floorColor="#e2c7a3" northDoor={secretOpen ? SECRET_DOOR : undefined} />
       <Rug position={[(LOBBY_RUG.minX + LOBBY_RUG.maxX) / 2, 0.004, (LOBBY_RUG.minZ + LOBBY_RUG.maxZ) / 2]} size={[LOBBY_RUG.maxX - LOBBY_RUG.minX, LOBBY_RUG.maxZ - LOBBY_RUG.minZ]} color="#ffd6a5" />
 
       {/* manager's office */}
@@ -313,6 +335,14 @@ export function Lobby() {
       />
       <ManagerComputer />
       <Bookshelf position={[-HALF_W + 0.4, 0, -8]} rotationY={Math.PI / 2} />
+      <SecretBookshelf />
+      {secretOpen && (
+        <Suspense fallback={null}>
+          <SecretRoom />
+        </Suspense>
+      )}
+      <Ducks place="lobby" />
+      <Graveyard />
       <Plant position={[m.maxX - 0.6, 0, m.minZ + 0.6]} scale={1.1} pot="#3a86ff" />
       <Plant position={[m.minX + 0.6, 0, m.maxZ - 0.6]} scale={0.9} />
       <WallSign

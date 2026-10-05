@@ -12,6 +12,9 @@ import { isKey } from './controls';
 import { Key } from './Key';
 import { Games, type GameId } from './games/Games';
 import { HolidayStrip } from './HolidayStrip';
+import { SecretsTab } from './SecretsTab';
+import { DUCKS } from '../world/secrets/ducks';
+import { useSecrets } from '../world/secrets/secretsState';
 import { replayKind } from './voiceQueue';
 import { effectiveModel } from '../../../shared/models';
 
@@ -557,11 +560,15 @@ export function Phone({ tab: initialTab, requestId }: { tab?: PhoneTab; requestI
 
   const pending = pendingRequests(requests).length;
   const unread = unreadMessages(messages, readAt);
+  // the duck counter (#266) appears once you've found a duck or an easter egg
+  const ducks = useSecrets((s) => s.found.length);
+  const secrets = useSecrets((s) => s.found.length + s.eggs.length > 0);
   const tabs: [PhoneTab, string, string, number][] = [
     ['chat', '💬', ceoName, tab === 'chat' ? 0 : unread],
     ['hires', '📄', 'Hires', pending],
     ['company', '📊', 'Company', 0],
     ['games', '🎮', 'Games', 0],
+    ...(secrets ? [['secrets', '🦆', `${ducks} / ${DUCKS.length}`, 0] as [PhoneTab, string, string, number]] : []),
   ];
   return (
     <div className="overlay phone-overlay" onMouseDown={(e) => e.target === e.currentTarget && closeOverlay()}>
@@ -578,6 +585,7 @@ export function Phone({ tab: initialTab, requestId }: { tab?: PhoneTab; requestI
           {tab === 'hires' && <Hires focusId={requestId} />}
           {tab === 'company' && <Company />}
           {tab === 'games' && <Games game={game} onGame={setGame} />}
+          {tab === 'secrets' && <SecretsTab />}
         </div>
         <nav className="phone-tabs" role="tablist" aria-label="Phone">
           {tabs.map(([k, icon, label, badge]) => (

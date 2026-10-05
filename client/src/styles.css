@@ -4981,3 +4981,27 @@ html[data-high-contrast] :is(button, a, input, select, textarea, summary, [tabin
   outline-offset: 2px;
   box-shadow: 0 0 0 6px #ffe066;
 }
+
+/* the phone's secrets tab (#266) */
+.secrets-list {
+  list-style: none;
+  margin: 0 0 8px;
+  padding: 0;
+}
+.secrets-list li {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 4px 0;
+  font-size: 13px;
+}
+.secrets-list .btn-small {
+  margin-left: auto;
+}
+.secrets-hint {
+  font-style: italic;
+}
+.secrets-cheer {
+  font-weight: 700;
+}

@@ -131,7 +131,26 @@ function CeilingLight({ position }: { position: [number, number, number] }) {
   );
 }
 
-export function Shell({ kind, accent, floorColor }: { kind: FloorKind; accent: string; floorColor: string }) {
+/** A doorway through the north wall (the lobby's secret room, #266): from minX to maxX, h tall. */
+export interface NorthDoor {
+  minX: number;
+  maxX: number;
+  h: number;
+}
+
+/** The north wall's pieces, left to right: whole, or either side of a doorway and over it. */
+function northWall(t: number, door?: NorthDoor): { x: number; y: number; w: number; h: number }[] {
+  const x0 = -HALF_W - t;
+  const x1 = HALF_W + t;
+  if (!door) return [{ x: 0, y: WALL_H / 2, w: x1 - x0, h: WALL_H }];
+  return [
+    { x: (x0 + door.minX) / 2, y: WALL_H / 2, w: door.minX - x0, h: WALL_H },
+    { x: (door.minX + door.maxX) / 2, y: (door.h + WALL_H) / 2, w: door.maxX - door.minX, h: WALL_H - door.h },
+    { x: (door.maxX + x1) / 2, y: WALL_H / 2, w: x1 - door.maxX, h: WALL_H },
+  ];
+}
+
+export function Shell({ kind, accent, floorColor, northDoor }: { kind: FloorKind; accent: string; floorColor: string; northDoor?: NorthDoor }) {
   const wall = toon(WALL);
   const t = 0.3;
   const { doorHalf, doorHeight } = ELEVATOR;
@@ -195,9 +214,11 @@ export function Shell({ kind, accent, floorColor }: { kind: FloorKind; accent: s
       <SunPatches kind={kind} />
 
       {/* walls */}
-      <mesh position={[0, WALL_H / 2, -HALF_D - t / 2]} material={wall} receiveShadow>
-        <boxGeometry args={[HALF_W * 2 + t * 2, WALL_H, t]} />
-      </mesh>
+      {northWall(t, northDoor).map((w) => (
+        <mesh key={w.x} position={[w.x, w.y, -HALF_D - t / 2]} material={wall} receiveShadow>
+          <boxGeometry args={[w.w, w.h, t]} />
+        </mesh>
+      ))}
       <SideWalls kind={kind} />
       {[-1, 1].map((s) => (
         <mesh key={s} position={[s * (doorHalf + southSeg / 2), WALL_H / 2, HALF_D + t / 2]} material={wall} receiveShadow>
@@ -210,7 +231,12 @@ export function Shell({ kind, accent, floorColor }: { kind: FloorKind; accent: s
 
       {/* skirting + accent stripe */}
       {[
-        { p: [0, 0, -HALF_D + 0.02] as const, r: 0, w: HALF_W * 2 },
+        ...(northDoor
+          ? [
+              { p: [(-HALF_W + northDoor.minX) / 2, 0, -HALF_D + 0.02] as const, r: 0, w: northDoor.minX + HALF_W },
+              { p: [(northDoor.maxX + HALF_W) / 2, 0, -HALF_D + 0.02] as const, r: 0, w: HALF_W - northDoor.maxX },
+            ]
+          : [{ p: [0, 0, -HALF_D + 0.02] as const, r: 0, w: HALF_W * 2 }]),
         ...sideTrim,
         { p: [-(doorHalf + southSeg / 2), 0, HALF_D - 0.02] as const, r: Math.PI, w: southSeg },
         { p: [doorHalf + southSeg / 2, 0, HALF_D - 0.02] as const, r: Math.PI, w: southSeg },
