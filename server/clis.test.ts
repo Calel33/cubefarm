@@ -1,8 +1,8 @@
 import os from 'node:os';
 import path from 'node:path';
 import fs from 'node:fs';
-import { describe, expect, it } from 'vitest';
-import { CODEX_HOOK_EVENTS, codexHookCommand, CROSS_TURN_TOOLS, hookReviewKey, interruptions, launchArgs, oneAtATime, OPENCODE_PLUGIN_V2_SOURCE, trustKey, unwrapCmdShim, type LaunchContext } from './clis.ts';
+import { afterAll, describe, expect, it } from 'vitest';
+import { CODEX_HOOK_EVENTS, codexHookCommand, CROSS_TURN_TOOLS, hookReviewKey, interruptions, launchArgs, oneAtATime, OPENCODE_PLUGIN_V2_SOURCE, resolveCli, trustKey, unwrapCmdShim, type LaunchContext } from './clis.ts';
 import { describeTool, newScreenshots, screenshotFile, summariseResult } from './agentRunner.ts';
 
 const dir = path.join(os.tmpdir(), 'npm-global');
@@ -26,6 +26,26 @@ describe('unwrapCmdShim', () => {
 
   it('gives up on shims it does not recognise', () => {
     expect(unwrapCmdShim(path.join(dir, 'x.cmd'), '@echo off\r\necho hi\r\n')).toBeNull();
+  });
+});
+
+describe('resolveCli', () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'cf-cli-'));
+  const bin = path.join(tmp, '.bun', 'bin');
+  fs.mkdirSync(bin, { recursive: true });
+  const exe = path.join(bin, process.platform === 'win32' ? 'fakecli.exe' : 'fakecli');
+  fs.writeFileSync(exe, 'x');
+  if (process.platform !== 'win32') fs.chmodSync(exe, 0o755);
+  // An office inherits the environment of whatever started it, so PATH may be empty even though the CLI is installed.
+  const env = { PATH: '', PATHEXT: '.EXE', USERPROFILE: tmp, HOME: tmp } as NodeJS.ProcessEnv;
+  afterAll(() => fs.rmSync(tmp, { recursive: true, force: true }));
+
+  it('finds a CLI in a common install directory when it is not on PATH', () => {
+    expect(resolveCli('fakecli', env)).toBe(exe);
+  });
+
+  it('honours CUBEFARM_<NAME>_PATH, so a manager can point at a specific build', () => {
+    expect(resolveCli('fakecli', { ...env, CUBEFARM_FAKECLI_PATH: exe })).toBe(exe);
   });
 });
 

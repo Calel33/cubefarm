@@ -29,13 +29,13 @@ export const cliLabel = (id: AgentCli) => CLIS.find((c) => c.id === id)?.label ?
 
 const WIN = process.platform === 'win32';
 
-/** The executable for a command name on PATH: on Windows only .exe/.cmd/.bat/.com, never an extensionless sh shim. */
-export function resolveCommand(name: string, env: NodeJS.ProcessEnv = process.env): string | null {
-  const key = Object.keys(env).find((k) => k.toUpperCase() === 'PATH') ?? 'PATH';
-  const dirs = (env[key] ?? '').split(path.delimiter).filter(Boolean);
-  const exts = WIN ? (env.PATHEXT ?? '.COM;.EXE;.BAT;.CMD').split(';').filter((e) => /^\.(exe|cmd|bat|com)$/i.test(e)) : [''];
+/** The executable suffixes for this platform: on Windows only .exe/.cmd/.bat/.com, never an extensionless sh shim. */
+const extsFor = (env: NodeJS.ProcessEnv) => (WIN ? (env.PATHEXT ?? '.COM;.EXE;.BAT;.CMD').split(';').filter((e) => /^\.(exe|cmd|bat|com)$/i.test(e)) : ['']);
+
+/** The first executable named `name` in these directories, or null. */
+function findIn(dirs: string[], name: string, env: NodeJS.ProcessEnv): string | null {
   for (const dir of dirs) {
-    for (const ext of exts) {
+    for (const ext of extsFor(env)) {
       const file = path.join(dir, name + ext.toLowerCase());
       try {
         const st = fs.statSync(file);
@@ -46,6 +46,52 @@ export function resolveCommand(name: string, env: NodeJS.ProcessEnv = process.en
     }
   }
   return null;
+}
+
+/** The executable for a command name on PATH. */
+export function resolveCommand(name: string, env: NodeJS.ProcessEnv = process.env): string | null {
+  const key = Object.keys(env).find((k) => k.toUpperCase() === 'PATH') ?? 'PATH';
+  return findIn((env[key] ?? '').split(path.delimiter).filter(Boolean), name, env);
+}
+
+/**
+ * Directories a coding CLI is often installed into but which may not be on the office's PATH: a bun global install
+ * (~/.bun/bin), an npm global prefix (~/AppData/Roaming/npm on Windows), ~/.local/bin and similar. The office
+ * inherits the environment of whatever started it, which isn't always the shell a manager installs CLIs from.
+ */
+function candidateDirs(env: NodeJS.ProcessEnv): string[] {
+  const home = env.USERPROFILE || env.HOME || '';
+  const appData = env.APPDATA || '';
+  const localAppData = env.LOCALAPPDATA || '';
+  const dirs = WIN
+    ? [
+        home && path.join(home, '.bun', 'bin'),
+        home && path.join(home, '.local', 'bin'),
+        home && path.join(home, '.opencode', 'bin'),
+        home && path.join(home, '.codex', 'bin'),
+        localAppData && path.join(localAppData, 'bun', 'bin'),
+        localAppData && path.join(localAppData, 'Programs', 'opencode'),
+        appData && path.join(appData, 'npm'),
+      ]
+    : [home && path.join(home, '.bun', 'bin'), home && path.join(home, '.local', 'bin'), home && path.join(home, '.opencode', 'bin'), '/usr/local/bin', '/opt/homebrew/bin'];
+  return dirs.filter((d): d is string => !!d);
+}
+
+/**
+ * The executable for a coding CLI: `CUBEFARM_<NAME>_PATH` if set, else PATH, else the common install directories
+ * above. The override lets a manager point at a specific build (several versions, or an off-PATH install);
+ * `CUBEFARM_OPENCODE_PATH`, `CUBEFARM_CLAUDE_PATH`, `CUBEFARM_CODEX_PATH`.
+ */
+export function resolveCli(name: string, env: NodeJS.ProcessEnv = process.env): string | null {
+  const override = env[`CUBEFARM_${name.toUpperCase()}_PATH`];
+  if (override) {
+    try {
+      if (fs.statSync(override).isFile()) return override;
+    } catch {
+      // the override is wrong: fall through to the normal search
+    }
+  }
+  return resolveCommand(name, env) ?? findIn(candidateDirs(env), name, env);
 }
 
 /**
@@ -105,7 +151,7 @@ export function commandFor(id: AgentCli): { file: string; args: string[] } | nul
   const bundled = id === 'claude' ? bundledClaude() : null;
   if (bundled) return { file: bundled, args: [] };
   const def = CLIS.find((c) => c.id === id);
-  const found = def && resolveCommand(def.command);
+  const found = def && resolveCli(def.command);
   if (!found) return null;
   if (WIN && /\.(cmd|bat)$/i.test(found)) {
     try {
