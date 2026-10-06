@@ -278,6 +278,23 @@ export function codexThread(action: 'archive' | 'unarchive', id: string, after?:
 // ---------- prompts the office answers ----------
 
 const TRUST_PROMPT = /Quick safety check|Do you trust the (files|contents) (in|of) this|trust this folder|allow Codex to work in this folder/i;
+const OPTION = /^\s*(?:[❯›]\s*)?(?:\d+\.\s*)?(yes|no)\b/i;
+const SELECTED = /^\s*[❯›]\s*(?:\d+\.\s*)?(.+)$/;
+
+/**
+ * The option a menu has selected under the last question on screen that `question` matches, or null when there's no
+ * such question or something was drawn below its menu. A terminal the office reuses (the CEO's) still shows older
+ * sessions above: their input box, or an old trust question, must not be read as this one's answer.
+ */
+function selectedOption(screen: string, question: RegExp): string | null {
+  const lines = screen.split('\n');
+  let at = -1;
+  for (let i = lines.length - 1; i >= 0 && at < 0; i--) if (question.test(lines[i]) && !OPTION.test(lines[i])) at = i;
+  if (at < 0) return null;
+  // One selection marker below the question: its menu's. Another one further down is a newer screen.
+  const marked = lines.slice(at + 1).filter((l) => SELECTED.test(l));
+  return marked.length === 1 ? marked[0].match(SELECTED)![1].trim() : null;
+}
 
 /**
  * The key that moves a CLI's folder-trust question toward trusting the office's own worktree: Enter when the
@@ -285,10 +302,10 @@ const TRUST_PROMPT = /Quick safety check|Do you trust the (files|contents) (in|o
  * question on screen.
  */
 export function trustKey(screen: string): 'enter' | 'down' | null {
-  if (!TRUST_PROMPT.test(screen)) return null;
-  const selected = screen.match(/^\s*[❯›]\s*(?:\d+\.\s*)?(.+)$/m)?.[1] ?? '';
-  if (/^(yes|trust|continue|proceed)\b/i.test(selected.trim())) return 'enter';
-  if (/^(no|exit|quit|cancel)\b/i.test(selected.trim())) return 'down';
+  const selected = selectedOption(screen, TRUST_PROMPT);
+  if (selected === null) return null;
+  if (/^(yes|trust|continue|proceed)\b/i.test(selected)) return 'enter';
+  if (/^(no|exit|quit|cancel)\b/i.test(selected)) return 'down';
   return null;
 }
 
@@ -297,9 +314,9 @@ export function trustKey(screen: string): 'enter' | 'down' | null {
  * manager's call (once, in /hooks): the office moves to "Continue without trusting" (Down) and takes it (Enter).
  */
 export function hookReviewKey(screen: string): 'enter' | 'down' | null {
-  if (!/Hooks need review/i.test(screen)) return null;
-  const selected = screen.match(/^\s*[❯›]\s*(?:\d+\.\s*)?(.+)$/m)?.[1] ?? '';
-  return /^continue without trusting/i.test(selected.trim()) ? 'enter' : 'down';
+  const selected = selectedOption(screen, /Hooks need review/i);
+  if (selected === null) return null;
+  return /^continue without trusting/i.test(selected) ? 'enter' : 'down';
 }
 
 /**

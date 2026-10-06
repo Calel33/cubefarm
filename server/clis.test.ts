@@ -53,6 +53,30 @@ describe('trustKey', () => {
   it('leaves every other screen alone', () => {
     expect(trustKey('❯ Try "refactor <filepath>"')).toBeNull();
   });
+
+  // #285: the CEO's terminal is reused, so older sessions are still on screen above a new one's question.
+  const asked = (selected: 'no' | 'yes') =>
+    [
+      'Quick safety check: Is this a project you created or one you trust?',
+      selected === 'no' ? '❯ No, exit' : '  No, exit',
+      selected === 'yes' ? '❯ Yes, I trust this folder' : '  Yes, I trust this folder',
+      'Enter to confirm · Esc to cancel',
+    ].join('\n');
+
+  it("reads the question's own menu under an older session's prompt", () => {
+    const old = ['● Reviewed the company: nothing to file.', '❯ Review the company now', '── Claude Code session ended ──'].join('\n');
+    expect(trustKey(`${old}\n${asked('no')}`)).toBe('down');
+    expect(trustKey(`${old}\n${asked('yes')}`)).toBe('enter');
+  });
+
+  it('answers the newest question, not one an ended session left on screen', () => {
+    const left = `${asked('yes')}\n── Claude Code session ended ──`;
+    expect(trustKey(`${left}\n${asked('no')}`)).toBe('down');
+  });
+
+  it("leaves a CLI alone that has moved past an old question still on screen", () => {
+    expect(trustKey(`${asked('yes')}\n● Hello\n❯ Try "refactor <filepath>"`)).toBeNull();
+  });
 });
 
 describe('hookReviewKey', () => {
