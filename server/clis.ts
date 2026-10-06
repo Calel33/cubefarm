@@ -128,6 +128,22 @@ export async function detectClis(): Promise<CliView[]> {
   );
 }
 
+/**
+ * The major version of a CLI (`opencode --version` says e.g. "opencode v2.0.21"). OpenCode 1 and 2 need different
+ * plugin shapes and plugin delivery, so the office picks between them by this. Cached: the binary doesn't change
+ * under a running office.
+ */
+const majors = new Map<AgentCli, number | null>();
+export async function cliMajor(id: AgentCli): Promise<number | null> {
+  if (majors.has(id)) return majors.get(id) ?? null;
+  const cmd = commandFor(id);
+  const out = cmd ? await run(cmd.file, [...cmd.args, '--version'], { timeoutMs: 20_000 }).catch(() => null) : null;
+  const hit = /(?:^|\s)v?(\d+)\./.exec(out ?? '');
+  const major = hit ? Number(hit[1]) : null;
+  majors.set(id, major);
+  return major;
+}
+
 // ---------- starting one on a task ----------
 
 export interface LaunchContext {
@@ -227,6 +243,9 @@ export function launchArgs(id: AgentCli, ctx: LaunchContext): Launch {
         plugin: [ctx.plugin],
         instructions: [ctx.files.system],
         autoupdate: false, // several agents starting at once must not each reinstall it
+        // OpenCode 2 dropped the top-level --model flag (only `opencode run` has it) and reads the model from
+        // config instead. OpenCode 1 reads the same `model` field, so this covers both.
+        ...(ctx.model ? { model: ctx.model } : {}),
         permission: { edit: 'allow', bash: 'allow', webfetch: 'allow' }, // it can't stop to ask either
         ...(ctx.browser ? { mcp: { playwright: { type: 'local', command: [ctx.browser.command, ...ctx.browser.args], enabled: true } } } : {}),
       };
@@ -234,7 +253,6 @@ export function launchArgs(id: AgentCli, ctx: LaunchContext): Launch {
       // desk clean-up take it for a leftover.
       const args = [
         '--auto',
-        ...(ctx.model ? ['--model', ctx.model] : []),
         ...(ctx.resumeId ? ['--session', ctx.resumeId] : []),
         '--prompt',
         ctx.prompt,
@@ -366,7 +384,10 @@ process.stdin.on('end', async () => {
 });
 `;
 
-/** OpenCode plugin: reports its session and when it goes idle (a turn is complete). No imports: loaded from a file. */
+/**
+ * OpenCode 1 plugin: reports its session and when it goes idle (a turn is complete). Loaded from a file, which
+ * OpenCode 1 accepts in the config's plugin list. OpenCode 2 uses OPENCODE_PLUGIN_V2_SOURCE instead.
+ */
 export const OPENCODE_PLUGIN_SOURCE = String.raw`// cubefarm: tells the office when OpenCode's session goes idle.
 export default async function CubefarmPlugin({ client } = {}) {
   const url = process.env.CUBEFARM_NOTIFY_URL;
@@ -395,4 +416,62 @@ export default async function CubefarmPlugin({ client } = {}) {
     },
   };
 }
+`;
+
+/**
+ * OpenCode 2 plugin (default-export definition with an id and a setup function — what OpenCode 2 requires; a bare
+ * exported function is rejected). OpenCode 2 streams events through ctx.event.subscribe, names them differently
+ * (session.execution.succeeded/failed/interrupted rather than session.idle) and carries the session id on the event
+ * data. The final assistant text arrives as session.text.ended; session.text.delta accumulates it in the meantime.
+ * It must be loaded from a directory (OpenCode 2 rejects a configured plugin path that points at a file).
+ */
+export const OPENCODE_PLUGIN_V2_SOURCE = String.raw`// cubefarm: tells the office when OpenCode 2 finishes a turn.
+const url = process.env.CUBEFARM_NOTIFY_URL;
+export default {
+  id: 'cubefarm',
+  async setup(ctx) {
+    if (!url || !ctx || !ctx.event) return;
+    const post = (body) =>
+      fetch(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body), signal: AbortSignal.timeout(3000) }).catch(() => {});
+    const texts = new Map();
+    const done = new Set();
+    const controller = new AbortController();
+    void (async () => {
+      try {
+        for await (const event of ctx.event.subscribe({ signal: controller.signal })) {
+          const data = (event && event.data) || {};
+          const id = data.sessionID;
+          const type = event && event.type;
+          if (type === 'session.text.delta') {
+            if (id) texts.set(id, (texts.get(id) || '') + String(data.delta || ''));
+            continue;
+          }
+          if (type === 'session.text.ended') {
+            if (id && typeof data.text === 'string') texts.set(id, data.text);
+            continue;
+          }
+          if (type === 'session.execution.started' || type === 'session.step.started') {
+            if (id) done.delete(id);
+            continue;
+          }
+          if (type === 'session.execution.succeeded' || type === 'session.execution.failed' || type === 'session.execution.interrupted' || type === 'session.idle') {
+            if (id && done.has(id)) continue;
+            if (id) done.add(id);
+            const text = id ? texts.get(id) || '' : '';
+            if (id) texts.delete(id);
+            post({ hook_event_name: 'TurnComplete', session_id: id || null, last_assistant_message: text });
+            continue;
+          }
+          if (type === 'session.error') {
+            const err = data.error || {};
+            post({ hook_event_name: 'TurnError', session_id: id || null, error: String(err.message || err.name || 'error') });
+          }
+        }
+      } catch {
+        // the office may be restarting; its next session picks the CLI up again
+      }
+    })();
+    return () => controller.abort();
+  },
+};
 `;

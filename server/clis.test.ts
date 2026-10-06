@@ -2,7 +2,7 @@ import os from 'node:os';
 import path from 'node:path';
 import fs from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { CODEX_HOOK_EVENTS, codexHookCommand, CROSS_TURN_TOOLS, hookReviewKey, interruptions, launchArgs, oneAtATime, trustKey, unwrapCmdShim, type LaunchContext } from './clis.ts';
+import { CODEX_HOOK_EVENTS, codexHookCommand, CROSS_TURN_TOOLS, hookReviewKey, interruptions, launchArgs, oneAtATime, OPENCODE_PLUGIN_V2_SOURCE, trustKey, unwrapCmdShim, type LaunchContext } from './clis.ts';
 import { describeTool, newScreenshots, screenshotFile, summariseResult } from './agentRunner.ts';
 
 const dir = path.join(os.tmpdir(), 'npm-global');
@@ -143,6 +143,21 @@ describe('launchArgs', () => {
     const config = (patch: Partial<LaunchContext>) => JSON.parse(launchArgs('opencode', ctx(patch)).env.OPENCODE_CONFIG_CONTENT);
     for (const role of ['dev', 'qa'] as const) expect(config({ role }).permission).toEqual({ edit: 'allow', bash: 'allow', webfetch: 'allow' });
     expect(config({}).autoupdate).toBe(false);
+  });
+
+  it('gives OpenCode its model through config, not the top-level --model flag that OpenCode 2 dropped', () => {
+    const chosen = launchArgs('opencode', ctx({ model: 'anthropic/claude-sonnet-5' }));
+    expect(JSON.parse(chosen.env.OPENCODE_CONFIG_CONTENT).model).toBe('anthropic/claude-sonnet-5');
+    expect(chosen.args).not.toContain('--model');
+    // No model named: the CLI's own default is left alone, and config carries no model.
+    expect(JSON.parse(launchArgs('opencode', ctx()).env.OPENCODE_CONFIG_CONTENT).model).toBeUndefined();
+  });
+
+  it('ships an OpenCode 2 plugin that default-exports an id and a setup function, and a directory to load it from', async () => {
+    const mod = (await import(`data:text/javascript,${encodeURIComponent(OPENCODE_PLUGIN_V2_SOURCE)}`)) as { default?: { id?: unknown; setup?: unknown } };
+    // OpenCode 2 rejects a bare exported function with PluginModule.LoadError; it wants this default definition.
+    expect(mod.default?.id).toBe('cubefarm');
+    expect(typeof mod.default?.setup).toBe('function');
   });
 });
 
