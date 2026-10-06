@@ -530,6 +530,11 @@ export default {
             if (id) done.add(id);
             const text = id ? texts.get(id) || '' : '';
             if (id) texts.delete(id);
+            // A failed execution must read as a failure, not a finished turn: say why, then end the turn.
+            if (type === 'session.execution.failed') {
+              const err = data.error || {};
+              post({ hook_event_name: 'TurnError', session_id: id || null, error: String(err.message || err.name || 'the session failed') });
+            }
             post({ hook_event_name: 'TurnComplete', session_id: id || null, last_assistant_message: text });
             continue;
           }

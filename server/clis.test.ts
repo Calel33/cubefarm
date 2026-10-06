@@ -192,6 +192,9 @@ describe('launchArgs', () => {
     // OpenCode 2 rejects a bare exported function with PluginModule.LoadError; it wants this default definition.
     expect(mod.default?.id).toBe('cubefarm');
     expect(typeof mod.default?.setup).toBe('function');
+    // A failed execution must report an error, not just a finished turn.
+    expect(OPENCODE_PLUGIN_V2_SOURCE).toContain('session.execution.failed');
+    expect(OPENCODE_PLUGIN_V2_SOURCE).toContain('TurnError');
   });
 });
 
