@@ -4,7 +4,7 @@ import { api } from '../api';
 import { PreviewPill, PreviewSettings } from './AppViewer';
 import { agentsOnRepo, pendingRequests, useStore, type ManagerTab } from '../store';
 import { CEO_ID, type AgentCli, type EffortLevel, type OfficeUpdateView, type RepoView } from '../../../shared/types';
-import { CLAUDE_MODELS } from '../../../shared/models';
+import { modelSuggestions } from '../../../shared/models';
 import { BriefEditor, CliOptions, CliSelect, cliName, EFFORTS, EffortSelect, LookSelect, ModelInput, NameInput, PromptPreview, SpecialtyInput, TitleInput } from './AgentSettings';
 import { canPostpone, canUpdateNow, drainDeadline, officeUpdateText } from '../officeUpdate';
 import { confirmDialog } from './Confirm';
@@ -583,6 +583,7 @@ function SettingsTab() {
   const set = (p: Parameters<typeof api.updateSettings>[0]) => void attempt(() => api.updateSettings(p));
   const terminal = settings.runtime === 'terminal';
   const defaultCli = terminal ? settings.defaultCli : 'claude';
+  const defaultSuggestions = clis.find((c) => c.id === defaultCli)?.models ?? modelSuggestions(defaultCli);
   return (
     <div className="tab-grid">
       <div className="card">
@@ -599,13 +600,13 @@ function SettingsTab() {
           <span>Default model{terminal ? ` for ${cliName(clis, settings.defaultCli)}` : ''}</span>
           <input
             key={`${settings.defaultCli}:${settings.defaultModel}`}
-            list={defaultCli === 'claude' ? 'models-s' : undefined}
+            list={defaultSuggestions.length ? 'models-s' : undefined}
             defaultValue={settings.defaultModel}
             placeholder="the agent's own default"
             onBlur={(e) => e.target.value !== settings.defaultModel && set({ defaultModel: e.target.value })}
           />
           <datalist id="models-s">
-            {CLAUDE_MODELS.map((m) => (
+            {defaultSuggestions.map((m) => (
               <option key={m} value={m} />
             ))}
           </datalist>

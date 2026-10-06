@@ -32,9 +32,9 @@ describe('effectiveModel', () => {
 describe('modelSuggestions', () => {
   it('only suggests models the chosen coding agent understands', () => {
     expect(modelSuggestions('claude').every(isClaudeModel)).toBe(true);
-    for (const cli of ['codex', 'opencode'] as const) {
-      expect(modelSuggestions(cli).length).toBeGreaterThan(0);
-      expect(modelSuggestions(cli).some(isClaudeModel)).toBe(false);
-    }
+    expect(modelSuggestions('codex').length).toBeGreaterThan(0);
+    expect(modelSuggestions('codex').some(isClaudeModel)).toBe(false);
+    // OpenCode's models come from the CLI (`opencode models`), so there are no built-in suggestions (and never Claude's).
+    expect(modelSuggestions('opencode')).toEqual([]);
   });
 });

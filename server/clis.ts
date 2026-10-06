@@ -163,13 +163,27 @@ export function commandFor(id: AgentCli): { file: string; args: string[] } | nul
   return { file: found, args: [] };
 }
 
-/** Which CLIs this machine has, with their versions. */
+/**
+ * The models a CLI can run, for the office's model fields. Best effort: no CLI, an old version, no network or no
+ * signed-in provider means no suggestions, and any name can still be typed. Currently OpenCode is the one with a
+ * `models` command (`opencode models` prints `provider/model` per line).
+ */
+async function listModels(id: AgentCli, cmd: { file: string; args: string[] }): Promise<string[] | undefined> {
+  if (id !== 'opencode') return undefined;
+  const out = await run(cmd.file, [...cmd.args, 'models'], { timeoutMs: 20_000 }).catch(() => null);
+  if (!out) return undefined;
+  const models = [...new Set(out.split(/\r?\n/).map((l) => l.trim()).filter((l) => /^[^\s#]+\/[^\s#]+$/.test(l)))];
+  return models.length ? models.slice(0, 300) : undefined;
+}
+
+/** Which CLIs this machine has, with their versions and (where the CLI can list them) their models. */
 export async function detectClis(): Promise<CliView[]> {
   return Promise.all(
     CLIS.map(async (c) => {
       const cmd = commandFor(c.id);
       const version = cmd ? await run(cmd.file, [...cmd.args, '--version'], { timeoutMs: 20_000 }).catch(() => null) : null;
-      return { id: c.id, label: c.label, installed: !!cmd, version: version?.split(/\r?\n/)[0].trim().slice(0, 60) || null, integrated: c.integrated };
+      const models = cmd ? await listModels(c.id, cmd) : undefined;
+      return { id: c.id, label: c.label, installed: !!cmd, version: version?.split(/\r?\n/)[0].trim().slice(0, 60) || null, integrated: c.integrated, ...(models ? { models } : {}) };
     }),
   );
 }

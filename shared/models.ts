@@ -24,5 +24,6 @@ export const CLAUDE_MODELS = ['claude-opus-5-5', 'claude-opus-5', 'claude-fable-
 export function modelSuggestions(cli: AgentCli): string[] {
   if (cli === 'claude') return CLAUDE_MODELS;
   if (cli === 'codex') return ['gpt-5.5-codex', 'gpt-5.5'];
-  return CLAUDE_MODELS.map((m) => `anthropic/${m}`);
+  // OpenCode: the office offers the models the CLI reports (CliView.models from `opencode models`), not made-up ones.
+  return [];
 }
