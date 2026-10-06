@@ -165,6 +165,8 @@ export interface LaunchContext {
   plugin: string; // file URL of the OpenCode plugin
   /** The Playwright MCP server, when the floor tests in a browser. Claude Code gets it through its MCP config file. */
   browser: { command: string; args: string[] } | null;
+  /** The office's MCP endpoint (the CEO's tools). Claude Code gets it through its MCP config file; OpenCode through config. */
+  officeUrl?: string;
 }
 
 export interface Launch {
@@ -239,6 +241,15 @@ export function launchArgs(id: AgentCli, ctx: LaunchContext): Launch {
       return { args: ctx.resumeId ? ['resume', ...args, ctx.resumeId, ctx.prompt] : [...args, '--', ctx.prompt], env: { CUBEFARM_HOOK_URL: ctx.notify.url } };
     }
     case 'opencode': {
+      // The CEO may not run shell commands or edit code (it acts only through the office tools and reads repos); the
+      // office's own worktrees may read linked repos and clones outside the session folder.
+      const permission =
+        ctx.role === 'ceo'
+          ? { edit: 'deny', bash: 'deny', webfetch: 'allow', external_directory: 'allow' }
+          : { edit: 'allow', bash: 'allow', webfetch: 'allow', external_directory: 'allow' };
+      const mcp: Record<string, unknown> = {};
+      if (ctx.officeUrl) mcp.office = { type: 'remote', url: ctx.officeUrl, enabled: true, oauth: false }; // the CEO's tools (no OAuth)
+      if (ctx.browser) mcp.playwright = { type: 'local', command: [ctx.browser.command, ...ctx.browser.args], enabled: true };
       const config = {
         plugin: [ctx.plugin],
         instructions: [ctx.files.system],
@@ -246,8 +257,8 @@ export function launchArgs(id: AgentCli, ctx: LaunchContext): Launch {
         // OpenCode 2 dropped the top-level --model flag (only `opencode run` has it) and reads the model from
         // config instead. OpenCode 1 reads the same `model` field, so this covers both.
         ...(ctx.model ? { model: ctx.model } : {}),
-        permission: { edit: 'allow', bash: 'allow', webfetch: 'allow' }, // it can't stop to ask either
-        ...(ctx.browser ? { mcp: { playwright: { type: 'local', command: [ctx.browser.command, ...ctx.browser.args], enabled: true } } } : {}),
+        permission,
+        ...(Object.keys(mcp).length ? { mcp } : {}),
       };
       // No project argument: it starts in its terminal's folder, and a desk path in its command line would make the
       // desk clean-up take it for a leftover.

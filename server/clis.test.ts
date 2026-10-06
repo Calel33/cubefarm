@@ -141,8 +141,22 @@ describe('launchArgs', () => {
 
   it("lets OpenCode run without stopping to ask, and without updating itself", () => {
     const config = (patch: Partial<LaunchContext>) => JSON.parse(launchArgs('opencode', ctx(patch)).env.OPENCODE_CONFIG_CONTENT);
-    for (const role of ['dev', 'qa'] as const) expect(config({ role }).permission).toEqual({ edit: 'allow', bash: 'allow', webfetch: 'allow' });
+    for (const role of ['dev', 'qa'] as const) expect(config({ role }).permission).toEqual({ edit: 'allow', bash: 'allow', webfetch: 'allow', external_directory: 'allow' });
     expect(config({}).autoupdate).toBe(false);
+  });
+
+  it("gives an OpenCode CEO the office tools over MCP and keeps its hands off the shell", () => {
+    const config = (patch: Partial<LaunchContext>) => JSON.parse(launchArgs('opencode', ctx(patch)).env.OPENCODE_CONFIG_CONTENT);
+    const ceo = config({ role: 'ceo', officeUrl: 'http://127.0.0.1:9/api/mcp/tok' });
+    expect(ceo.mcp.office).toEqual({ type: 'remote', url: 'http://127.0.0.1:9/api/mcp/tok', enabled: true, oauth: false });
+    expect(ceo.permission.edit).toBe('deny');
+    expect(ceo.permission.bash).toBe('deny');
+    // Developers get the office endpoint when one is given, and keep edit and shell.
+    const dev = config({ role: 'dev', officeUrl: 'http://127.0.0.1:9/api/mcp/tok' });
+    expect(dev.mcp.office.url).toBe('http://127.0.0.1:9/api/mcp/tok');
+    expect(dev.permission.edit).toBe('allow');
+    // No office endpoint (a developer): no office MCP server at all.
+    expect(config({ role: 'dev' }).mcp).toBeUndefined();
   });
 
   it('gives OpenCode its model through config, not the top-level --model flag that OpenCode 2 dropped', () => {

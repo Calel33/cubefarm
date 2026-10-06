@@ -2183,7 +2183,7 @@ export class Swarm {
    */
   private sessionRuntime(a: PersistedAgent, resume?: string): { terminal?: AgentTerminal; cli?: AgentCli; label?: string; resumeSessionId?: string } {
     const inTerminal = this.state.settings.runtime === 'terminal' && this.backend.terminals;
-    let cli: AgentCli = a.role === 'ceo' ? 'claude' : a.cli || this.state.settings.defaultCli;
+    let cli: AgentCli = a.cli || this.state.settings.defaultCli;
     if (resume && a.sessionCli && a.sessionCli !== cli) {
       if (inTerminal) cli = a.sessionCli;
       else if (a.sessionCli !== 'claude') resume = undefined;
@@ -3749,7 +3749,11 @@ export class Swarm {
 
   private ceoPromptInput(a: PersistedAgent): Parameters<typeof ceoSystemPrompt>[0] {
     const s = this.state.settings;
-    return { name: a.name, company: s.companyName, manager: s.managerName, notesFile: path.join(CEO_DIR, 'NOTES.md'), sessionLimit: s.sessionLimit, teamCap: s.teamCap, hiring: s.hiring };
+    const cli = a.cli || s.defaultCli;
+    // The office's MCP tools are named `mcp__office__<tool>` by Claude Code and `office_<tool>` by OpenCode (it joins
+    // the server key and the tool name with an underscore), so the prompt spells them the way the CEO's CLI does.
+    const toolPrefix = cli === 'opencode' ? 'office_' : 'mcp__office__';
+    return { name: a.name, company: s.companyName, manager: s.managerName, notesFile: path.join(CEO_DIR, 'NOTES.md'), sessionLimit: s.sessionLimit, teamCap: s.teamCap, hiring: s.hiring, toolPrefix };
   }
 
   private async runCeoJob(a: PersistedAgent, job: CeoJob) {
@@ -3782,12 +3786,13 @@ export class Swarm {
     }
     // A chat carries on from the CEO's last session, so "why did you propose that?" has an answer.
     const how = this.sessionRuntime(a, job.kind === 'chat' ? (a.sessionId ?? undefined) : undefined);
+    const ceoInput = this.ceoPromptInput(a);
     rt.session = this.backend.startSession(
       {
         cwd: CEO_DIR,
-        prompt: ceoJobPrompt(job, floor, triage),
-        systemAppend: ceoSystemPrompt(this.ceoPromptInput(a)),
-        model: a.model || CEO_MODEL,
+        prompt: ceoJobPrompt(job, floor, triage, ceoInput.toolPrefix),
+        systemAppend: ceoSystemPrompt(ceoInput),
+        model: effectiveModel(a.model, how.cli ?? 'claude', this.state.settings, CEO_MODEL),
         effort: a.effort || CEO_EFFORT,
         browserTesting: false,
         additionalDirectories: this.state.repos.filter((r) => this.repoRt.get(r.id)?.cloneStatus === 'ready').map((r) => this.backend.mainDir(r.fullName)),
@@ -3804,7 +3809,7 @@ export class Swarm {
         },
         sessionId: (id) => {
           a.sessionId = id;
-          a.sessionCli = id ? 'claude' : null;
+          a.sessionCli = id ? (how.cli ?? 'claude') : null;
         },
         browserUrl: () => undefined,
         screenshot: () => undefined,
@@ -4785,8 +4790,8 @@ export class Swarm {
         doing: this.agentDoing(a),
         issue: a.issueNumber ? { number: a.issueNumber, title: a.issueTitle } : null,
         pullRequest: a.prNumber ? { number: a.prNumber, url: a.prUrl } : null,
-        codingAgent: ceo ? 'claude' : a.cli || this.state.settings.defaultCli,
-        model: ceo ? a.model || CEO_MODEL : this.modelFor(a, a.cli || this.state.settings.defaultCli) || 'the coding agent default',
+        codingAgent: a.cli || this.state.settings.defaultCli,
+        model: this.modelFor(a, a.cli || this.state.settings.defaultCli) || 'the coding agent default',
         effort: a.effort || (ceo ? CEO_EFFORT : this.state.settings.defaultEffort),
         hiredBy: a.hiredBy,
         jobDescription: a.brief || null,

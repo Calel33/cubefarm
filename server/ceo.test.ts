@@ -264,7 +264,7 @@ describe('planning guidance', () => {
     expect(system).toContain('capacity.prsAwaitingQa');
     expect(system).toContain('Most briefs need 1 to 4 issues.');
     expect(system).toContain('Keep dependency chains to two steps at most.');
-    expect(system).toContain('with route_issue');
+    expect(system).toContain('with mcp__office__route_issue');
     expect(system).toContain('File at most 12 issues per job');
   });
 
@@ -278,6 +278,17 @@ describe('planning guidance', () => {
     expect(review).not.toContain('free developers');
     expect(review).toContain('PRs piling up in QA (then plan fewer, bigger issues)');
     expect(review).toContain('Idle developers are not a reason to slice features');
+  });
+
+  it("names the office tools the way the CEO's CLI does", () => {
+    const base = { name: 'Luna', company: 'Acme', manager: 'Sam', notesFile: 'notes.md', sessionLimit: 0, teamCap: 6, hiring: 'approve' as const };
+    // Claude Code: mcp__office__<tool>. OpenCode joins the server key and tool name with an underscore.
+    expect(ceoSystemPrompt(base)).toContain('mcp__office__company_status');
+    expect(review).toContain('mcp__office__route_issue');
+    const opencode = { ...base, toolPrefix: 'office_' };
+    expect(ceoSystemPrompt(opencode)).toContain('office_company_status');
+    expect(ceoSystemPrompt(opencode)).not.toContain('mcp__office__');
+    expect(ceoJobPrompt({ kind: 'review', at: 0 }, null, null, 'office_')).toContain('office_route_issue');
   });
 });
 
@@ -307,7 +318,7 @@ describe('triage', () => {
     for (const fact of ['#108', 'Jukebox volume', 'QA round 3', pr.summary, pr.fixInstructions, pr.mergeNote, pr.why, 'GitHub checks: failing (failed: CI / e2e)', 'mergeable: CONFLICTING (DIRTY)', 'triage 1 of 2']) {
       expect(prompt).toContain(fact);
     }
-    expect(prompt).toContain('retry_qa, send_back, rerun_checks, close_pull or escalate');
+    expect(prompt).toContain('mcp__office__retry_qa, mcp__office__send_back, mcp__office__rerun_checks, mcp__office__close_pull or mcp__office__escalate');
   });
 
   it('has nothing to do once the PR is no longer stuck', () => {

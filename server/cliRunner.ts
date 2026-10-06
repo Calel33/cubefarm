@@ -653,6 +653,9 @@ export function startCliSession(opts: SessionOptions, callbacks: SessionCallback
     prompt += `\n\nWhen you are done, end your final message with your report as one JSON object in a \`\`\`json block, matching this JSON schema:\n${JSON.stringify(opts.outputSchema)}`;
   }
   let files: { settings: string; mcp: string | null; system: string };
+  /** The office's MCP endpoint for this session's token: the CEO's tools. Claude Code reads it from its MCP config
+   *  file; OpenCode gets it in its injected config. */
+  let officeMcpUrl: string | undefined;
   try {
     writeHelpers();
     fs.mkdirSync(dir, { recursive: true });
@@ -662,7 +665,10 @@ export function startCliSession(opts: SessionOptions, callbacks: SessionCallback
     };
     const servers: Record<string, unknown> = {};
     if (browser) servers.playwright = browser;
-    if (opts.office) servers.office = { type: 'http', url: `${officeUrl}/api/mcp/${token}` };
+    if (opts.office) {
+      officeMcpUrl = `${officeUrl}/api/mcp/${token}`;
+      servers.office = { type: 'http', url: officeMcpUrl };
+    }
     files = { settings: path.join(dir, 'settings.json'), mcp: Object.keys(servers).length ? path.join(dir, 'mcp.json') : null, system: path.join(dir, 'instructions.md') };
     fs.writeFileSync(files.settings, JSON.stringify(settings, null, 2));
     if (files.mcp) fs.writeFileSync(files.mcp, JSON.stringify({ mcpServers: servers }, null, 2));
@@ -709,6 +715,7 @@ export function startCliSession(opts: SessionOptions, callbacks: SessionCallback
       codexHook: path.join(BIN_DIR, 'codex-hook.cjs'),
       plugin: cli === 'opencode' ? await opencodePluginSpec() : pathToFileURL(path.join(BIN_DIR, 'opencode-plugin.mjs')).href,
       browser,
+      officeUrl: officeMcpUrl,
     });
 
   if (cli === 'claude' && opts.resumeSessionId) cb.sessionId(sessionId);
