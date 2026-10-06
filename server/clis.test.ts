@@ -179,12 +179,19 @@ describe('launchArgs', () => {
     expect(config({ role: 'dev' }).mcp).toBeUndefined();
   });
 
-  it('gives OpenCode its model through config, not the top-level --model flag that OpenCode 2 dropped', () => {
-    const chosen = launchArgs('opencode', ctx({ model: 'anthropic/claude-sonnet-5' }));
-    expect(JSON.parse(chosen.env.OPENCODE_CONFIG_CONTENT).model).toBe('anthropic/claude-sonnet-5');
+  it('gives OpenCode its model through config, with the reasoning level as the model variant', () => {
+    const config = (patch: Partial<LaunchContext>) => JSON.parse(launchArgs('opencode', ctx(patch)).env.OPENCODE_CONFIG_CONTENT);
+    // ctx() defaults to medium effort, which OpenCode takes as the model variant.
+    const chosen = launchArgs('opencode', ctx({ model: 'omniroute/cinf/glm-5.2' }));
+    expect(JSON.parse(chosen.env.OPENCODE_CONFIG_CONTENT).model).toBe('omniroute/cinf/glm-5.2#medium');
     expect(chosen.args).not.toContain('--model');
-    // No model named: the CLI's own default is left alone, and config carries no model.
-    expect(JSON.parse(launchArgs('opencode', ctx()).env.OPENCODE_CONFIG_CONTENT).model).toBeUndefined();
+    // xhigh is a Claude tier with no OpenCode variant: it maps to high. max passes through.
+    expect(config({ model: 'm/n', effort: 'xhigh' }).model).toBe('m/n#high');
+    expect(config({ model: 'm/n', effort: 'max' }).model).toBe('m/n#max');
+    // No named effort, or a model that already names its own variant, is left alone. No model: nothing to attach it to.
+    expect(config({ model: 'm/n', effort: '' }).model).toBe('m/n');
+    expect(config({ model: 'm/n#low', effort: 'high' }).model).toBe('m/n#low');
+    expect(config({}).model).toBeUndefined();
   });
 
   it('ships an OpenCode 2 plugin that default-exports an id and a setup function, and a directory to load it from', async () => {

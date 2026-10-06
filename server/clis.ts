@@ -236,6 +236,19 @@ export interface Launch {
 
 const EFFORT_CODEX: Record<EffortLevel, string> = { low: 'low', medium: 'medium', high: 'high', xhigh: 'xhigh', max: 'xhigh' };
 
+/**
+ * OpenCode expresses a reasoning level as a model variant: `provider/model#variant`. Its shipped models name them
+ * low/medium/high (some also minimal or max); `xhigh` is a Claude effort with no OpenCode tier, so it maps to high.
+ * A model that doesn't define the variant simply ignores it (OpenCode falls back to the model's own default).
+ */
+const EFFORT_OPENCODE: Record<EffortLevel, string> = { low: 'low', medium: 'medium', high: 'high', xhigh: 'high', max: 'max' };
+
+/** The OpenCode model string: `provider/model#variant`. A model that already names its own variant is left alone. */
+function opencodeModel(model: string, effort: EffortLevel | ''): string {
+  if (!effort || model.includes('#')) return model;
+  return `${model}#${EFFORT_OPENCODE[effort]}`;
+}
+
 /** Codex hooks the office listens to: its steps, and Esc interrupting a turn. Turn endings come from notify. */
 export const CODEX_HOOK_EVENTS = ['SessionStart', 'UserPromptSubmit', 'PreToolUse', 'PostToolUse', 'Interrupt'];
 
@@ -315,8 +328,8 @@ export function launchArgs(id: AgentCli, ctx: LaunchContext): Launch {
         instructions: [ctx.files.system],
         autoupdate: false, // several agents starting at once must not each reinstall it
         // OpenCode 2 dropped the top-level --model flag (only `opencode run` has it) and reads the model from
-        // config instead. OpenCode 1 reads the same `model` field, so this covers both.
-        ...(ctx.model ? { model: ctx.model } : {}),
+        // config instead, variant and all (`provider/model#variant`). OpenCode 1 reads the same `model` field.
+        ...(ctx.model ? { model: opencodeModel(ctx.model, ctx.effort) } : {}),
         permission,
         ...(Object.keys(mcp).length ? { mcp } : {}),
       };

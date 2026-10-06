@@ -110,14 +110,13 @@ export function ModelInput({ agent, id, className = 'inline', style }: FieldProp
 export function EffortSelect({ agent, id, style }: FieldProps) {
   const settings = useStore((s) => s.settings);
   const defaultEffort = settings.defaultEffort;
-  // OpenCode decides reasoning from the chosen model; the office passes no effort, so the field would be a lie.
-  const ignored = settings.runtime === 'terminal' && (agent.cli || settings.defaultCli) === 'opencode';
+  // On OpenCode the reasoning level picks the model variant (`provider/model#effort`).
+  const opencode = settings.runtime === 'terminal' && (agent.cli || settings.defaultCli) === 'opencode';
   return (
     <select
       id={id}
       value={agent.effort}
-      disabled={ignored}
-      title={ignored ? 'OpenCode chooses reasoning from the model; the office does not pass an effort' : agent.role === 'ceo' ? "The CEO's effort" : 'Their effort'}
+      title={opencode ? 'Reasoning level: sets the OpenCode model variant (provider/model#effort)' : agent.role === 'ceo' ? "The CEO's effort" : 'Their effort'}
       aria-label={id ? undefined : 'Effort'}
       style={style}
       onChange={(e) => void save(agent.id, { effort: e.target.value })}
