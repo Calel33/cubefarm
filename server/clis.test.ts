@@ -177,6 +177,8 @@ describe('launchArgs', () => {
     expect(dev.permission.edit).toBe('allow');
     // No office endpoint (a developer): no office MCP server at all.
     expect(config({ role: 'dev' }).mcp).toBeUndefined();
+    // OpenCode 2 only honours the instructions as the build agent's system prompt, not via config.instructions.
+    expect(config({ role: 'dev' }).agent.build.prompt).toBe('You are Ada.');
   });
 
   it('gives OpenCode its model through config, with the reasoning level as the model variant', () => {

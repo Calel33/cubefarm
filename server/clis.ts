@@ -325,6 +325,10 @@ export function launchArgs(id: AgentCli, ctx: LaunchContext): Launch {
       if (ctx.browser) mcp.playwright = { type: 'local', command: [ctx.browser.command, ...ctx.browser.args], enabled: true };
       const config = {
         plugin: [ctx.plugin],
+        // OpenCode 2 does not apply config.instructions as behavioural rules (the model reads them as data), so the
+        // office's instructions go on the build agent's system prompt, which OpenCode honours. `instructions` stays
+        // for OpenCode 1 and as extra context.
+        agent: { build: { prompt: ctx.systemAppend } },
         instructions: [ctx.files.system],
         autoupdate: false, // several agents starting at once must not each reinstall it
         // OpenCode 2 dropped the top-level --model flag (only `opencode run` has it) and reads the model from
