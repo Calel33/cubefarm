@@ -2031,7 +2031,8 @@ export class Swarm {
     patch: { name?: string; model?: string; effort?: string; cli?: string; look?: string; title?: string; specialty?: string; brief?: string; color?: string; hair?: string; style?: unknown },
   ) {
     const a = this.agent(id);
-    if (patch.cli !== undefined && a.role !== 'ceo') a.cli = isCli(patch.cli) ? patch.cli : '';
+    // Any agent, the CEO included, can change coding agent (the Agent SDK runtime still runs Claude Code for everyone).
+    if (patch.cli !== undefined) a.cli = isCli(patch.cli) ? patch.cli : '';
     if (patch.name?.trim() && patch.name.trim() !== a.name) {
       a.name = patch.name.trim().slice(0, 24);
       a.look = lookFor(a.name);

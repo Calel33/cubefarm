@@ -258,6 +258,7 @@ function CeoTab() {
   const repos = useStore((s) => s.repos);
   const requests = useStore((s) => s.requests);
   const openOverlay = useStore((s) => s.openOverlay);
+  const terminal = useStore((s) => s.settings.runtime === 'terminal');
   const [text, setText] = useState('');
   const scroller = useRef<HTMLDivElement>(null);
   useLayoutEffect(() => {
@@ -285,6 +286,7 @@ function CeoTab() {
             <span className="muted small">CEO</span>
             <StatusPill status={ceo.status} />
             <span className="spacer" />
+            {terminal && <CliSelect agent={ceo} style={{ width: 'auto' }} />}
             <ModelInput agent={ceo} style={{ maxWidth: 150 }} />
             <EffortSelect agent={ceo} style={{ width: 'auto' }} />
           </div>
