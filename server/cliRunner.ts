@@ -6,7 +6,7 @@ import type { Request, Response } from 'express';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { browserProblem, playwrightMcp } from './browser.ts';
 import { HOME_DIR } from './config.ts';
-import { cliLabel, cliMajor, CODEX_HOOK_SOURCE, codexThread, commandFor, hookReviewKey, interruptions, isCli, launchArgs, NOTIFY_SOURCE, OPENCODE_PLUGIN_SOURCE, OPENCODE_PLUGIN_V2_SOURCE, STATUSLINE_SOURCE, trustKey } from './clis.ts';
+import { CLIS, cliLabel, cliMajor, CODEX_HOOK_SOURCE, codexThread, commandFor, hookReviewKey, interruptions, isCli, launchArgs, NOTIFY_SOURCE, OPENCODE_PLUGIN_SOURCE, OPENCODE_PLUGIN_V2_SOURCE, STATUSLINE_SOURCE, trustKey } from './clis.ts';
 import { adoptPty, discardPty, hooksReady, keeperHookUrl, keeperPid, leaveKeeper, spawnPty, startKeeper, terminalsAvailable, type Pty } from './ptyClient.ts';
 import {
   clip,
@@ -719,6 +719,19 @@ export function startCliSession(opts: SessionOptions, callbacks: SessionCallback
     });
 
   if (cli === 'claude' && opts.resumeSessionId) cb.sessionId(sessionId);
+  // If a different coding agent last used this terminal, wipe its screen first: the old CLI's output (and its
+  // alternate buffer) would otherwise linger under the new one.
+  const prior = term.snapshot();
+  let at = -1;
+  let lastLabel = '';
+  for (const c of CLIS) {
+    const i = prior.lastIndexOf(`── ${c.label}`);
+    if (i > at) {
+      at = i;
+      lastLabel = c.label;
+    }
+  }
+  if (lastLabel && lastLabel !== label) term.clear();
   term.note(`── ${label}${opts.label ? ` · ${opts.label}` : ''} ──`);
   const resumeId = cli === 'claude' ? sessionId : (opts.resumeSessionId ?? null);
   const l: LiveCli = { agentId: opts.agentId ?? '', cli, term, proc: null, token, dir, resumeId, statusLine, shots: new Set(), session: { hook, exited } };

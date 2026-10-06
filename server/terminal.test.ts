@@ -15,6 +15,16 @@ describe('AgentTerminal', () => {
     again.dispose();
   });
 
+  it('wipes the screen and scrollback so a different coding agent starts clean', async () => {
+    const t = new AgentTerminal();
+    t.write('old claude output\r\n');
+    await t.flush();
+    t.clear();
+    await t.flush();
+    expect(t.screen().trim()).toBe('');
+    t.dispose();
+  });
+
   it('sends keystrokes and sizes to the running CLI, within sane bounds', () => {
     const t = new AgentTerminal();
     const got: string[] = [];

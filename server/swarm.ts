@@ -34,7 +34,7 @@ import { drainDecision, lastUpdateMessage, POSTPONE_MS, type DrainInput, type La
 import { clampPacingSessions, DEFAULT_PACING_SESSIONS, mayStart, PACING_MS, pacingMessage, resumeRefusal, usageLabel, usageView, waived, warningView, type UsageWarning, type Waiver, type WorkKind } from './pacing.ts';
 import { emptyHistory, loadHistory, opsView, recordChecks, recordCost, recordMerges, recordQa, type OpsFloorState, type OpsHistory } from './metrics.ts';
 import { clampTrimIdleMin, DEFAULT_TRIM_IDLE_MIN, desksToTrim, formatBytes, freedMessage, idleSince, TRIM_SWEEP_MS } from './deskTrim.ts';
-import { isCli } from './clis.ts';
+import { CLIS, cliLabel, isCli } from './clis.ts';
 import { envSecrets, Journal } from './journal.ts';
 import { sampleDay, seeded } from './journalSample.ts';
 import { addTenure, apply as applyLedger, buy as buyDecor, emptyLedger, grant as grantCoins, loadLedger, place as placeDecor, progressView, type CommandResult, type Effects, type LedgerEvent, type LedgerState } from './ledger.ts';
@@ -2204,6 +2204,24 @@ export class Swarm {
     if (!(await fs.stat(terminalFile(agentId)).catch(() => null))) return null;
     const t = this.newTerminal(agentId);
     await t.load(terminalFile(agentId));
+    await t.flush();
+    // If the agent now runs a different coding agent than the one that last used this terminal, clear the leftover
+    // screen so the panel doesn't keep showing the old CLI (a manager opening the desk would see the previous one).
+    const a = this.state.agents.find((x) => x.id === agentId);
+    if (a && this.state.settings.runtime === 'terminal') {
+      const cli = a.cli || this.state.settings.defaultCli;
+      const snap = t.snapshot();
+      let at = -1;
+      let lastLabel = '';
+      for (const c of CLIS) {
+        const i = snap.lastIndexOf(`── ${c.label}`);
+        if (i > at) {
+          at = i;
+          lastLabel = c.label;
+        }
+      }
+      if (lastLabel && lastLabel !== cliLabel(cli)) t.clear();
+    }
     return t;
   }
 
