@@ -9,6 +9,11 @@ export default defineConfig({
   root: 'client',
   plugins: [react()],
   server: {
+    // Deterministic loopback: cloudflared on this machine reaches Vite at 127.0.0.1:clientPort.
+    // Does NOT expose the dev server to the LAN.
+    host: '127.0.0.1',
+    // Narrow allow for the per-start Quick Tunnel hostname (*.trycloudflare.com). Never true (GHSA-vg6x-rcgg-rjx6).
+    allowedHosts: ['.trycloudflare.com'],
     port: clientPort,
     strictPort: true,
     proxy: {
