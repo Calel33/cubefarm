@@ -168,7 +168,7 @@ export type AgentTask = 'issue' | 'qa' | 'fix';
  */
 export type AgentRuntime = 'terminal' | 'sdk';
 
-/** The coding-agent CLI an agent runs in its terminal. The CEO is always Claude Code. */
+/** The coding-agent CLI an agent runs in its terminal. Any agent, the CEO included, can run any installed one. */
 export type AgentCli = 'claude' | 'codex' | 'opencode';
 
 /** A coding-agent CLI the office knows how to run, and whether it's installed on this machine. */
@@ -179,6 +179,8 @@ export interface CliView {
   version: string | null;
   /** Hooks report every tool call and enforce the guard rails; the others report only when a turn ends. */
   integrated: boolean;
+  /** Models this CLI can run, for the office's model fields (OpenCode: what `opencode models` reports). */
+  models?: string[];
 }
 
 /** Messages on an agent's terminal socket (/ws/term?agent=<id>), server to browser. */

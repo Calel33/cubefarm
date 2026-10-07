@@ -34,7 +34,7 @@ import { drainDecision, lastUpdateMessage, POSTPONE_MS, type DrainInput, type La
 import { clampPacingSessions, DEFAULT_PACING_SESSIONS, mayStart, PACING_MS, pacingMessage, resumeRefusal, usageLabel, usageView, waived, warningView, type UsageWarning, type Waiver, type WorkKind } from './pacing.ts';
 import { emptyHistory, loadHistory, opsView, recordChecks, recordCost, recordMerges, recordQa, type OpsFloorState, type OpsHistory } from './metrics.ts';
 import { clampTrimIdleMin, DEFAULT_TRIM_IDLE_MIN, desksToTrim, formatBytes, freedMessage, idleSince, TRIM_SWEEP_MS } from './deskTrim.ts';
-import { isCli } from './clis.ts';
+import { CLIS, cliLabel, isCli } from './clis.ts';
 import { envSecrets, Journal } from './journal.ts';
 import { sampleDay, seeded } from './journalSample.ts';
 import { addTenure, apply as applyLedger, buy as buyDecor, emptyLedger, grant as grantCoins, loadLedger, place as placeDecor, progressView, type CommandResult, type Effects, type LedgerEvent, type LedgerState } from './ledger.ts';
@@ -2031,7 +2031,8 @@ export class Swarm {
     patch: { name?: string; model?: string; effort?: string; cli?: string; look?: string; title?: string; specialty?: string; brief?: string; color?: string; hair?: string; style?: unknown },
   ) {
     const a = this.agent(id);
-    if (patch.cli !== undefined && a.role !== 'ceo') a.cli = isCli(patch.cli) ? patch.cli : '';
+    // Any agent, the CEO included, can change coding agent (the Agent SDK runtime still runs Claude Code for everyone).
+    if (patch.cli !== undefined) a.cli = isCli(patch.cli) ? patch.cli : '';
     if (patch.name?.trim() && patch.name.trim() !== a.name) {
       a.name = patch.name.trim().slice(0, 24);
       a.look = lookFor(a.name);
@@ -2179,15 +2180,14 @@ export class Swarm {
 
   /**
    * How an agent's next session runs: the CLI in their terminal (the terminal runtime), or Claude Code through the
-   * SDK. A session can only be resumed by the CLI that made it, so a follow-up stays with that CLI.
+   * SDK. A session can only be resumed by the CLI that made it: if the agent's coding agent has changed since (the
+   * manager picked another one), the follow-up starts fresh in the new CLI rather than quietly running the old one.
    */
   private sessionRuntime(a: PersistedAgent, resume?: string): { terminal?: AgentTerminal; cli?: AgentCli; label?: string; resumeSessionId?: string } {
     const inTerminal = this.state.settings.runtime === 'terminal' && this.backend.terminals;
-    let cli: AgentCli = a.role === 'ceo' ? 'claude' : a.cli || this.state.settings.defaultCli;
-    if (resume && a.sessionCli && a.sessionCli !== cli) {
-      if (inTerminal) cli = a.sessionCli;
-      else if (a.sessionCli !== 'claude') resume = undefined;
-    }
+    let cli: AgentCli = a.cli || this.state.settings.defaultCli;
+    if (!inTerminal) cli = 'claude'; // the Agent SDK only runs Claude Code
+    if (resume && a.sessionCli && a.sessionCli !== cli) resume = undefined; // the CLI changed: it can't resume that session
     if (!inTerminal) return { resumeSessionId: resume };
     const what = a.role === 'ceo' ? a.issueTitle : a.task === 'qa' ? `QA · PR #${a.prNumber}` : a.task === 'fix' ? `fixing PR #${a.prNumber}` : a.issueNumber ? `#${a.issueNumber} ${a.issueTitle ?? ''}` : null;
     return { terminal: this.terminalFor(a), cli, label: `${a.name}${what ? ` · ${what}` : ''}`.slice(0, 80).trim(), resumeSessionId: resume };
@@ -2204,6 +2204,24 @@ export class Swarm {
     if (!(await fs.stat(terminalFile(agentId)).catch(() => null))) return null;
     const t = this.newTerminal(agentId);
     await t.load(terminalFile(agentId));
+    await t.flush();
+    // If the agent now runs a different coding agent than the one that last used this terminal, clear the leftover
+    // screen so the panel doesn't keep showing the old CLI (a manager opening the desk would see the previous one).
+    const a = this.state.agents.find((x) => x.id === agentId);
+    if (a && this.state.settings.runtime === 'terminal') {
+      const cli = a.cli || this.state.settings.defaultCli;
+      const snap = t.snapshot();
+      let at = -1;
+      let lastLabel = '';
+      for (const c of CLIS) {
+        const i = snap.lastIndexOf(`── ${c.label}`);
+        if (i > at) {
+          at = i;
+          lastLabel = c.label;
+        }
+      }
+      if (lastLabel && lastLabel !== cliLabel(cli)) t.clear();
+    }
     return t;
   }
 
@@ -3749,7 +3767,11 @@ export class Swarm {
 
   private ceoPromptInput(a: PersistedAgent): Parameters<typeof ceoSystemPrompt>[0] {
     const s = this.state.settings;
-    return { name: a.name, company: s.companyName, manager: s.managerName, notesFile: path.join(CEO_DIR, 'NOTES.md'), sessionLimit: s.sessionLimit, teamCap: s.teamCap, hiring: s.hiring };
+    const cli = a.cli || s.defaultCli;
+    // The office's MCP tools are named `mcp__office__<tool>` by Claude Code and `office_<tool>` by OpenCode (it joins
+    // the server key and the tool name with an underscore), so the prompt spells them the way the CEO's CLI does.
+    const toolPrefix = cli === 'opencode' ? 'office_' : 'mcp__office__';
+    return { name: a.name, company: s.companyName, manager: s.managerName, notesFile: path.join(CEO_DIR, 'NOTES.md'), sessionLimit: s.sessionLimit, teamCap: s.teamCap, hiring: s.hiring, toolPrefix };
   }
 
   private async runCeoJob(a: PersistedAgent, job: CeoJob) {
@@ -3782,12 +3804,13 @@ export class Swarm {
     }
     // A chat carries on from the CEO's last session, so "why did you propose that?" has an answer.
     const how = this.sessionRuntime(a, job.kind === 'chat' ? (a.sessionId ?? undefined) : undefined);
+    const ceoInput = this.ceoPromptInput(a);
     rt.session = this.backend.startSession(
       {
         cwd: CEO_DIR,
-        prompt: ceoJobPrompt(job, floor, triage),
-        systemAppend: ceoSystemPrompt(this.ceoPromptInput(a)),
-        model: a.model || CEO_MODEL,
+        prompt: ceoJobPrompt(job, floor, triage, ceoInput.toolPrefix),
+        systemAppend: ceoSystemPrompt(ceoInput),
+        model: effectiveModel(a.model, how.cli ?? 'claude', this.state.settings, CEO_MODEL),
         effort: a.effort || CEO_EFFORT,
         browserTesting: false,
         additionalDirectories: this.state.repos.filter((r) => this.repoRt.get(r.id)?.cloneStatus === 'ready').map((r) => this.backend.mainDir(r.fullName)),
@@ -3804,7 +3827,7 @@ export class Swarm {
         },
         sessionId: (id) => {
           a.sessionId = id;
-          a.sessionCli = id ? 'claude' : null;
+          a.sessionCli = id ? (how.cli ?? 'claude') : null;
         },
         browserUrl: () => undefined,
         screenshot: () => undefined,
@@ -4785,8 +4808,8 @@ export class Swarm {
         doing: this.agentDoing(a),
         issue: a.issueNumber ? { number: a.issueNumber, title: a.issueTitle } : null,
         pullRequest: a.prNumber ? { number: a.prNumber, url: a.prUrl } : null,
-        codingAgent: ceo ? 'claude' : a.cli || this.state.settings.defaultCli,
-        model: ceo ? a.model || CEO_MODEL : this.modelFor(a, a.cli || this.state.settings.defaultCli) || 'the coding agent default',
+        codingAgent: a.cli || this.state.settings.defaultCli,
+        model: this.modelFor(a, a.cli || this.state.settings.defaultCli) || 'the coding agent default',
         effort: a.effort || (ceo ? CEO_EFFORT : this.state.settings.defaultEffort),
         hiredBy: a.hiredBy,
         jobDescription: a.brief || null,

@@ -29,13 +29,13 @@ export const cliLabel = (id: AgentCli) => CLIS.find((c) => c.id === id)?.label ?
 
 const WIN = process.platform === 'win32';
 
-/** The executable for a command name on PATH: on Windows only .exe/.cmd/.bat/.com, never an extensionless sh shim. */
-export function resolveCommand(name: string, env: NodeJS.ProcessEnv = process.env): string | null {
-  const key = Object.keys(env).find((k) => k.toUpperCase() === 'PATH') ?? 'PATH';
-  const dirs = (env[key] ?? '').split(path.delimiter).filter(Boolean);
-  const exts = WIN ? (env.PATHEXT ?? '.COM;.EXE;.BAT;.CMD').split(';').filter((e) => /^\.(exe|cmd|bat|com)$/i.test(e)) : [''];
+/** The executable suffixes for this platform: on Windows only .exe/.cmd/.bat/.com, never an extensionless sh shim. */
+const extsFor = (env: NodeJS.ProcessEnv) => (WIN ? (env.PATHEXT ?? '.COM;.EXE;.BAT;.CMD').split(';').filter((e) => /^\.(exe|cmd|bat|com)$/i.test(e)) : ['']);
+
+/** The first executable named `name` in these directories, or null. */
+function findIn(dirs: string[], name: string, env: NodeJS.ProcessEnv): string | null {
   for (const dir of dirs) {
-    for (const ext of exts) {
+    for (const ext of extsFor(env)) {
       const file = path.join(dir, name + ext.toLowerCase());
       try {
         const st = fs.statSync(file);
@@ -46,6 +46,52 @@ export function resolveCommand(name: string, env: NodeJS.ProcessEnv = process.en
     }
   }
   return null;
+}
+
+/** The executable for a command name on PATH. */
+export function resolveCommand(name: string, env: NodeJS.ProcessEnv = process.env): string | null {
+  const key = Object.keys(env).find((k) => k.toUpperCase() === 'PATH') ?? 'PATH';
+  return findIn((env[key] ?? '').split(path.delimiter).filter(Boolean), name, env);
+}
+
+/**
+ * Directories a coding CLI is often installed into but which may not be on the office's PATH: a bun global install
+ * (~/.bun/bin), an npm global prefix (~/AppData/Roaming/npm on Windows), ~/.local/bin and similar. The office
+ * inherits the environment of whatever started it, which isn't always the shell a manager installs CLIs from.
+ */
+function candidateDirs(env: NodeJS.ProcessEnv): string[] {
+  const home = env.USERPROFILE || env.HOME || '';
+  const appData = env.APPDATA || '';
+  const localAppData = env.LOCALAPPDATA || '';
+  const dirs = WIN
+    ? [
+        home && path.join(home, '.bun', 'bin'),
+        home && path.join(home, '.local', 'bin'),
+        home && path.join(home, '.opencode', 'bin'),
+        home && path.join(home, '.codex', 'bin'),
+        localAppData && path.join(localAppData, 'bun', 'bin'),
+        localAppData && path.join(localAppData, 'Programs', 'opencode'),
+        appData && path.join(appData, 'npm'),
+      ]
+    : [home && path.join(home, '.bun', 'bin'), home && path.join(home, '.local', 'bin'), home && path.join(home, '.opencode', 'bin'), '/usr/local/bin', '/opt/homebrew/bin'];
+  return dirs.filter((d): d is string => !!d);
+}
+
+/**
+ * The executable for a coding CLI: `CUBEFARM_<NAME>_PATH` if set, else PATH, else the common install directories
+ * above. The override lets a manager point at a specific build (several versions, or an off-PATH install);
+ * `CUBEFARM_OPENCODE_PATH`, `CUBEFARM_CLAUDE_PATH`, `CUBEFARM_CODEX_PATH`.
+ */
+export function resolveCli(name: string, env: NodeJS.ProcessEnv = process.env): string | null {
+  const override = env[`CUBEFARM_${name.toUpperCase()}_PATH`];
+  if (override) {
+    try {
+      if (fs.statSync(override).isFile()) return override;
+    } catch {
+      // the override is wrong: fall through to the normal search
+    }
+  }
+  return resolveCommand(name, env) ?? findIn(candidateDirs(env), name, env);
 }
 
 /**
@@ -105,7 +151,7 @@ export function commandFor(id: AgentCli): { file: string; args: string[] } | nul
   const bundled = id === 'claude' ? bundledClaude() : null;
   if (bundled) return { file: bundled, args: [] };
   const def = CLIS.find((c) => c.id === id);
-  const found = def && resolveCommand(def.command);
+  const found = def && resolveCli(def.command);
   if (!found) return null;
   if (WIN && /\.(cmd|bat)$/i.test(found)) {
     try {
@@ -117,15 +163,45 @@ export function commandFor(id: AgentCli): { file: string; args: string[] } | nul
   return { file: found, args: [] };
 }
 
-/** Which CLIs this machine has, with their versions. */
+/**
+ * The models a CLI can run, for the office's model fields. Best effort: no CLI, an old version, no network or no
+ * signed-in provider means no suggestions, and any name can still be typed. Currently OpenCode is the one with a
+ * `models` command (`opencode models` prints `provider/model` per line).
+ */
+async function listModels(id: AgentCli, cmd: { file: string; args: string[] }): Promise<string[] | undefined> {
+  if (id !== 'opencode') return undefined;
+  const out = await run(cmd.file, [...cmd.args, 'models'], { timeoutMs: 20_000 }).catch(() => null);
+  if (!out) return undefined;
+  const models = [...new Set(out.split(/\r?\n/).map((l) => l.trim()).filter((l) => /^[^\s#]+\/[^\s#]+$/.test(l)))];
+  return models.length ? models.slice(0, 300) : undefined;
+}
+
+/** Which CLIs this machine has, with their versions and (where the CLI can list them) their models. */
 export async function detectClis(): Promise<CliView[]> {
   return Promise.all(
     CLIS.map(async (c) => {
       const cmd = commandFor(c.id);
       const version = cmd ? await run(cmd.file, [...cmd.args, '--version'], { timeoutMs: 20_000 }).catch(() => null) : null;
-      return { id: c.id, label: c.label, installed: !!cmd, version: version?.split(/\r?\n/)[0].trim().slice(0, 60) || null, integrated: c.integrated };
+      const models = cmd ? await listModels(c.id, cmd) : undefined;
+      return { id: c.id, label: c.label, installed: !!cmd, version: version?.split(/\r?\n/)[0].trim().slice(0, 60) || null, integrated: c.integrated, ...(models ? { models } : {}) };
     }),
   );
+}
+
+/**
+ * The major version of a CLI (`opencode --version` says e.g. "opencode v2.0.21"). OpenCode 1 and 2 need different
+ * plugin shapes and plugin delivery, so the office picks between them by this. Cached: the binary doesn't change
+ * under a running office.
+ */
+const majors = new Map<AgentCli, number | null>();
+export async function cliMajor(id: AgentCli): Promise<number | null> {
+  if (majors.has(id)) return majors.get(id) ?? null;
+  const cmd = commandFor(id);
+  const out = cmd ? await run(cmd.file, [...cmd.args, '--version'], { timeoutMs: 20_000 }).catch(() => null) : null;
+  const hit = /(?:^|\s)v?(\d+)\./.exec(out ?? '');
+  const major = hit ? Number(hit[1]) : null;
+  majors.set(id, major);
+  return major;
 }
 
 // ---------- starting one on a task ----------
@@ -149,6 +225,8 @@ export interface LaunchContext {
   plugin: string; // file URL of the OpenCode plugin
   /** The Playwright MCP server, when the floor tests in a browser. Claude Code gets it through its MCP config file. */
   browser: { command: string; args: string[] } | null;
+  /** The office's MCP endpoint (the CEO's tools). Claude Code gets it through its MCP config file; OpenCode through config. */
+  officeUrl?: string;
 }
 
 export interface Launch {
@@ -157,6 +235,19 @@ export interface Launch {
 }
 
 const EFFORT_CODEX: Record<EffortLevel, string> = { low: 'low', medium: 'medium', high: 'high', xhigh: 'xhigh', max: 'xhigh' };
+
+/**
+ * OpenCode expresses a reasoning level as a model variant: `provider/model#variant`. Its shipped models name them
+ * low/medium/high (some also minimal or max); `xhigh` is a Claude effort with no OpenCode tier, so it maps to high.
+ * A model that doesn't define the variant simply ignores it (OpenCode falls back to the model's own default).
+ */
+const EFFORT_OPENCODE: Record<EffortLevel, string> = { low: 'low', medium: 'medium', high: 'high', xhigh: 'high', max: 'max' };
+
+/** The OpenCode model string: `provider/model#variant`. A model that already names its own variant is left alone. */
+function opencodeModel(model: string, effort: EffortLevel | ''): string {
+  if (!effort || model.includes('#')) return model;
+  return `${model}#${EFFORT_OPENCODE[effort]}`;
+}
 
 /** Codex hooks the office listens to: its steps, and Esc interrupting a turn. Turn endings come from notify. */
 export const CODEX_HOOK_EVENTS = ['SessionStart', 'UserPromptSubmit', 'PreToolUse', 'PostToolUse', 'Interrupt'];
@@ -223,18 +314,33 @@ export function launchArgs(id: AgentCli, ctx: LaunchContext): Launch {
       return { args: ctx.resumeId ? ['resume', ...args, ctx.resumeId, ctx.prompt] : [...args, '--', ctx.prompt], env: { CUBEFARM_HOOK_URL: ctx.notify.url } };
     }
     case 'opencode': {
+      // The CEO may not run shell commands or edit code (it acts only through the office tools and reads repos); the
+      // office's own worktrees may read linked repos and clones outside the session folder.
+      const permission =
+        ctx.role === 'ceo'
+          ? { edit: 'deny', bash: 'deny', webfetch: 'allow', external_directory: 'allow' }
+          : { edit: 'allow', bash: 'allow', webfetch: 'allow', external_directory: 'allow' };
+      const mcp: Record<string, unknown> = {};
+      if (ctx.officeUrl) mcp.office = { type: 'remote', url: ctx.officeUrl, enabled: true, oauth: false }; // the CEO's tools (no OAuth)
+      if (ctx.browser) mcp.playwright = { type: 'local', command: [ctx.browser.command, ...ctx.browser.args], enabled: true };
       const config = {
         plugin: [ctx.plugin],
+        // OpenCode 2 does not apply config.instructions as behavioural rules (the model reads them as data), so the
+        // office's instructions go on the build agent's system prompt, which OpenCode honours. `instructions` stays
+        // for OpenCode 1 and as extra context.
+        agent: { build: { prompt: ctx.systemAppend } },
         instructions: [ctx.files.system],
         autoupdate: false, // several agents starting at once must not each reinstall it
-        permission: { edit: 'allow', bash: 'allow', webfetch: 'allow' }, // it can't stop to ask either
-        ...(ctx.browser ? { mcp: { playwright: { type: 'local', command: [ctx.browser.command, ...ctx.browser.args], enabled: true } } } : {}),
+        // OpenCode 2 dropped the top-level --model flag (only `opencode run` has it) and reads the model from
+        // config instead, variant and all (`provider/model#variant`). OpenCode 1 reads the same `model` field.
+        ...(ctx.model ? { model: opencodeModel(ctx.model, ctx.effort) } : {}),
+        permission,
+        ...(Object.keys(mcp).length ? { mcp } : {}),
       };
       // No project argument: it starts in its terminal's folder, and a desk path in its command line would make the
       // desk clean-up take it for a leftover.
       const args = [
         '--auto',
-        ...(ctx.model ? ['--model', ctx.model] : []),
         ...(ctx.resumeId ? ['--session', ctx.resumeId] : []),
         '--prompt',
         ctx.prompt,
@@ -366,7 +472,10 @@ process.stdin.on('end', async () => {
 });
 `;
 
-/** OpenCode plugin: reports its session and when it goes idle (a turn is complete). No imports: loaded from a file. */
+/**
+ * OpenCode 1 plugin: reports its session and when it goes idle (a turn is complete). Loaded from a file, which
+ * OpenCode 1 accepts in the config's plugin list. OpenCode 2 uses OPENCODE_PLUGIN_V2_SOURCE instead.
+ */
 export const OPENCODE_PLUGIN_SOURCE = String.raw`// cubefarm: tells the office when OpenCode's session goes idle.
 export default async function CubefarmPlugin({ client } = {}) {
   const url = process.env.CUBEFARM_NOTIFY_URL;
@@ -395,4 +504,67 @@ export default async function CubefarmPlugin({ client } = {}) {
     },
   };
 }
+`;
+
+/**
+ * OpenCode 2 plugin (default-export definition with an id and a setup function — what OpenCode 2 requires; a bare
+ * exported function is rejected). OpenCode 2 streams events through ctx.event.subscribe, names them differently
+ * (session.execution.succeeded/failed/interrupted rather than session.idle) and carries the session id on the event
+ * data. The final assistant text arrives as session.text.ended; session.text.delta accumulates it in the meantime.
+ * It must be loaded from a directory (OpenCode 2 rejects a configured plugin path that points at a file).
+ */
+export const OPENCODE_PLUGIN_V2_SOURCE = String.raw`// cubefarm: tells the office when OpenCode 2 finishes a turn.
+const url = process.env.CUBEFARM_NOTIFY_URL;
+export default {
+  id: 'cubefarm',
+  async setup(ctx) {
+    if (!url || !ctx || !ctx.event) return;
+    const post = (body) =>
+      fetch(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body), signal: AbortSignal.timeout(3000) }).catch(() => {});
+    const texts = new Map();
+    const done = new Set();
+    const controller = new AbortController();
+    void (async () => {
+      try {
+        for await (const event of ctx.event.subscribe({ signal: controller.signal })) {
+          const data = (event && event.data) || {};
+          const id = data.sessionID;
+          const type = event && event.type;
+          if (type === 'session.text.delta') {
+            if (id) texts.set(id, (texts.get(id) || '') + String(data.delta || ''));
+            continue;
+          }
+          if (type === 'session.text.ended') {
+            if (id && typeof data.text === 'string') texts.set(id, data.text);
+            continue;
+          }
+          if (type === 'session.execution.started' || type === 'session.step.started') {
+            if (id) done.delete(id);
+            continue;
+          }
+          if (type === 'session.execution.succeeded' || type === 'session.execution.failed' || type === 'session.execution.interrupted' || type === 'session.idle') {
+            if (id && done.has(id)) continue;
+            if (id) done.add(id);
+            const text = id ? texts.get(id) || '' : '';
+            if (id) texts.delete(id);
+            // A failed execution must read as a failure, not a finished turn: say why, then end the turn.
+            if (type === 'session.execution.failed') {
+              const err = data.error || {};
+              post({ hook_event_name: 'TurnError', session_id: id || null, error: String(err.message || err.name || 'the session failed') });
+            }
+            post({ hook_event_name: 'TurnComplete', session_id: id || null, last_assistant_message: text });
+            continue;
+          }
+          if (type === 'session.error') {
+            const err = data.error || {};
+            post({ hook_event_name: 'TurnError', session_id: id || null, error: String(err.message || err.name || 'error') });
+          }
+        }
+      } catch {
+        // the office may be restarting; its next session picks the CLI up again
+      }
+    })();
+    return () => controller.abort();
+  },
+};
 `;

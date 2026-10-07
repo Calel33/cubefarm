@@ -4,7 +4,7 @@ import { api } from '../api';
 import { PreviewPill, PreviewSettings } from './AppViewer';
 import { agentsOnRepo, pendingRequests, useStore, type ManagerTab } from '../store';
 import { CEO_ID, type AgentCli, type EffortLevel, type OfficeUpdateView, type RepoView } from '../../../shared/types';
-import { CLAUDE_MODELS } from '../../../shared/models';
+import { modelSuggestions } from '../../../shared/models';
 import { BriefEditor, CliOptions, CliSelect, cliName, EFFORTS, EffortSelect, LookSelect, ModelInput, NameInput, PromptPreview, SpecialtyInput, TitleInput } from './AgentSettings';
 import { canPostpone, canUpdateNow, drainDeadline, officeUpdateText } from '../officeUpdate';
 import { confirmDialog } from './Confirm';
@@ -258,6 +258,7 @@ function CeoTab() {
   const repos = useStore((s) => s.repos);
   const requests = useStore((s) => s.requests);
   const openOverlay = useStore((s) => s.openOverlay);
+  const terminal = useStore((s) => s.settings.runtime === 'terminal');
   const [text, setText] = useState('');
   const scroller = useRef<HTMLDivElement>(null);
   useLayoutEffect(() => {
@@ -285,6 +286,7 @@ function CeoTab() {
             <span className="muted small">CEO</span>
             <StatusPill status={ceo.status} />
             <span className="spacer" />
+            {terminal && <CliSelect agent={ceo} style={{ width: 'auto' }} />}
             <ModelInput agent={ceo} style={{ maxWidth: 150 }} />
             <EffortSelect agent={ceo} style={{ width: 'auto' }} />
           </div>
@@ -581,6 +583,7 @@ function SettingsTab() {
   const set = (p: Parameters<typeof api.updateSettings>[0]) => void attempt(() => api.updateSettings(p));
   const terminal = settings.runtime === 'terminal';
   const defaultCli = terminal ? settings.defaultCli : 'claude';
+  const defaultSuggestions = clis.find((c) => c.id === defaultCli)?.models ?? modelSuggestions(defaultCli);
   return (
     <div className="tab-grid">
       <div className="card">
@@ -597,13 +600,13 @@ function SettingsTab() {
           <span>Default model{terminal ? ` for ${cliName(clis, settings.defaultCli)}` : ''}</span>
           <input
             key={`${settings.defaultCli}:${settings.defaultModel}`}
-            list={defaultCli === 'claude' ? 'models-s' : undefined}
+            list={defaultSuggestions.length ? 'models-s' : undefined}
             defaultValue={settings.defaultModel}
             placeholder="the agent's own default"
             onBlur={(e) => e.target.value !== settings.defaultModel && set({ defaultModel: e.target.value })}
           />
           <datalist id="models-s">
-            {CLAUDE_MODELS.map((m) => (
+            {defaultSuggestions.map((m) => (
               <option key={m} value={m} />
             ))}
           </datalist>
@@ -620,7 +623,7 @@ function SettingsTab() {
         </label>
         <p className="muted small">
           {terminal
-            ? 'Each worker can use their own coding agent, model and effort (Team tab); the CEO always runs Claude Code. Claude Code reports every step; Codex and OpenCode are experimental: the office sees their task rather than each step.'
+            ? 'Each worker (and the CEO, on the CEO tab) can use their own coding agent, model and effort. Claude Code reports every step; Codex and OpenCode are experimental: the office sees their task rather than each step.'
             : 'The Agent SDK runs Claude Code. Each worker can use their own model and effort (Team tab).'}
         </p>
         <label className="field">

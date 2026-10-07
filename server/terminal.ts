@@ -78,6 +78,11 @@ export class AgentTerminal {
     this.write(`\r\n\x1b[2m${text}\x1b[0m\r\n`);
   }
 
+  /** Wipe the screen and scrollback: a different coding agent is taking over this terminal. */
+  clear() {
+    this.write('\x1b[2J\x1b[3J\x1b[H');
+  }
+
   get live() {
     return this.sink !== null;
   }

@@ -1,8 +1,8 @@
 import os from 'node:os';
 import path from 'node:path';
 import fs from 'node:fs';
-import { describe, expect, it } from 'vitest';
-import { CODEX_HOOK_EVENTS, codexHookCommand, CROSS_TURN_TOOLS, hookReviewKey, interruptions, launchArgs, oneAtATime, trustKey, unwrapCmdShim, type LaunchContext } from './clis.ts';
+import { afterAll, describe, expect, it } from 'vitest';
+import { CODEX_HOOK_EVENTS, codexHookCommand, CROSS_TURN_TOOLS, hookReviewKey, interruptions, launchArgs, oneAtATime, OPENCODE_PLUGIN_V2_SOURCE, resolveCli, trustKey, unwrapCmdShim, type LaunchContext } from './clis.ts';
 import { describeTool, newScreenshots, screenshotFile, summariseResult } from './agentRunner.ts';
 
 const dir = path.join(os.tmpdir(), 'npm-global');
@@ -26,6 +26,26 @@ describe('unwrapCmdShim', () => {
 
   it('gives up on shims it does not recognise', () => {
     expect(unwrapCmdShim(path.join(dir, 'x.cmd'), '@echo off\r\necho hi\r\n')).toBeNull();
+  });
+});
+
+describe('resolveCli', () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'cf-cli-'));
+  const bin = path.join(tmp, '.bun', 'bin');
+  fs.mkdirSync(bin, { recursive: true });
+  const exe = path.join(bin, process.platform === 'win32' ? 'fakecli.exe' : 'fakecli');
+  fs.writeFileSync(exe, 'x');
+  if (process.platform !== 'win32') fs.chmodSync(exe, 0o755);
+  // An office inherits the environment of whatever started it, so PATH may be empty even though the CLI is installed.
+  const env = { PATH: '', PATHEXT: '.EXE', USERPROFILE: tmp, HOME: tmp } as NodeJS.ProcessEnv;
+  afterAll(() => fs.rmSync(tmp, { recursive: true, force: true }));
+
+  it('finds a CLI in a common install directory when it is not on PATH', () => {
+    expect(resolveCli('fakecli', env)).toBe(exe);
+  });
+
+  it('honours CUBEFARM_<NAME>_PATH, so a manager can point at a specific build', () => {
+    expect(resolveCli('fakecli', { ...env, CUBEFARM_FAKECLI_PATH: exe })).toBe(exe);
   });
 });
 
@@ -141,8 +161,49 @@ describe('launchArgs', () => {
 
   it("lets OpenCode run without stopping to ask, and without updating itself", () => {
     const config = (patch: Partial<LaunchContext>) => JSON.parse(launchArgs('opencode', ctx(patch)).env.OPENCODE_CONFIG_CONTENT);
-    for (const role of ['dev', 'qa'] as const) expect(config({ role }).permission).toEqual({ edit: 'allow', bash: 'allow', webfetch: 'allow' });
+    for (const role of ['dev', 'qa'] as const) expect(config({ role }).permission).toEqual({ edit: 'allow', bash: 'allow', webfetch: 'allow', external_directory: 'allow' });
     expect(config({}).autoupdate).toBe(false);
+  });
+
+  it("gives an OpenCode CEO the office tools over MCP and keeps its hands off the shell", () => {
+    const config = (patch: Partial<LaunchContext>) => JSON.parse(launchArgs('opencode', ctx(patch)).env.OPENCODE_CONFIG_CONTENT);
+    const ceo = config({ role: 'ceo', officeUrl: 'http://127.0.0.1:9/api/mcp/tok' });
+    expect(ceo.mcp.office).toEqual({ type: 'remote', url: 'http://127.0.0.1:9/api/mcp/tok', enabled: true, oauth: false });
+    expect(ceo.permission.edit).toBe('deny');
+    expect(ceo.permission.bash).toBe('deny');
+    // Developers get the office endpoint when one is given, and keep edit and shell.
+    const dev = config({ role: 'dev', officeUrl: 'http://127.0.0.1:9/api/mcp/tok' });
+    expect(dev.mcp.office.url).toBe('http://127.0.0.1:9/api/mcp/tok');
+    expect(dev.permission.edit).toBe('allow');
+    // No office endpoint (a developer): no office MCP server at all.
+    expect(config({ role: 'dev' }).mcp).toBeUndefined();
+    // OpenCode 2 only honours the instructions as the build agent's system prompt, not via config.instructions.
+    expect(config({ role: 'dev' }).agent.build.prompt).toBe('You are Ada.');
+  });
+
+  it('gives OpenCode its model through config, with the reasoning level as the model variant', () => {
+    const config = (patch: Partial<LaunchContext>) => JSON.parse(launchArgs('opencode', ctx(patch)).env.OPENCODE_CONFIG_CONTENT);
+    // ctx() defaults to medium effort, which OpenCode takes as the model variant.
+    const chosen = launchArgs('opencode', ctx({ model: 'omniroute/cinf/glm-5.2' }));
+    expect(JSON.parse(chosen.env.OPENCODE_CONFIG_CONTENT).model).toBe('omniroute/cinf/glm-5.2#medium');
+    expect(chosen.args).not.toContain('--model');
+    // xhigh is a Claude tier with no OpenCode variant: it maps to high. max passes through.
+    expect(config({ model: 'm/n', effort: 'xhigh' }).model).toBe('m/n#high');
+    expect(config({ model: 'm/n', effort: 'max' }).model).toBe('m/n#max');
+    // No named effort, or a model that already names its own variant, is left alone. No model: nothing to attach it to.
+    expect(config({ model: 'm/n', effort: '' }).model).toBe('m/n');
+    expect(config({ model: 'm/n#low', effort: 'high' }).model).toBe('m/n#low');
+    expect(config({}).model).toBeUndefined();
+  });
+
+  it('ships an OpenCode 2 plugin that default-exports an id and a setup function, and a directory to load it from', async () => {
+    const mod = (await import(`data:text/javascript,${encodeURIComponent(OPENCODE_PLUGIN_V2_SOURCE)}`)) as { default?: { id?: unknown; setup?: unknown } };
+    // OpenCode 2 rejects a bare exported function with PluginModule.LoadError; it wants this default definition.
+    expect(mod.default?.id).toBe('cubefarm');
+    expect(typeof mod.default?.setup).toBe('function');
+    // A failed execution must report an error, not just a finished turn.
+    expect(OPENCODE_PLUGIN_V2_SOURCE).toContain('session.execution.failed');
+    expect(OPENCODE_PLUGIN_V2_SOURCE).toContain('TurnError');
   });
 });
 

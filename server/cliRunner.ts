@@ -6,7 +6,7 @@ import type { Request, Response } from 'express';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { browserProblem, playwrightMcp } from './browser.ts';
 import { HOME_DIR } from './config.ts';
-import { cliLabel, CODEX_HOOK_SOURCE, codexThread, commandFor, hookReviewKey, interruptions, isCli, launchArgs, NOTIFY_SOURCE, OPENCODE_PLUGIN_SOURCE, STATUSLINE_SOURCE, trustKey } from './clis.ts';
+import { CLIS, cliLabel, cliMajor, CODEX_HOOK_SOURCE, codexThread, commandFor, hookReviewKey, interruptions, isCli, launchArgs, NOTIFY_SOURCE, OPENCODE_PLUGIN_SOURCE, OPENCODE_PLUGIN_V2_SOURCE, STATUSLINE_SOURCE, trustKey } from './clis.ts';
 import { adoptPty, discardPty, hooksReady, keeperHookUrl, keeperPid, leaveKeeper, spawnPty, startKeeper, terminalsAvailable, type Pty } from './ptyClient.ts';
 import {
   clip,
@@ -107,7 +107,23 @@ function writeHelpers() {
   fs.writeFileSync(path.join(BIN_DIR, 'notify.cjs'), NOTIFY_SOURCE);
   fs.writeFileSync(path.join(BIN_DIR, 'codex-hook.cjs'), CODEX_HOOK_SOURCE);
   fs.writeFileSync(path.join(BIN_DIR, 'opencode-plugin.mjs'), OPENCODE_PLUGIN_SOURCE);
+  // OpenCode 2 only accepts a configured plugin path that is a directory, so its plugin goes in one with an index.
+  fs.mkdirSync(OPENCODE_PLUGIN_V2_DIR, { recursive: true });
+  fs.writeFileSync(path.join(OPENCODE_PLUGIN_V2_DIR, 'index.js'), OPENCODE_PLUGIN_V2_SOURCE);
   helpersWritten = true;
+}
+
+/** Where OpenCode 2's plugin lives (a directory, not a file: see opencodePluginSpec). */
+const OPENCODE_PLUGIN_V2_DIR = path.join(BIN_DIR, 'opencode-plugin-v2');
+
+/**
+ * The plugin spec the office hands OpenCode in its config. OpenCode 2 requires a directory (a file path is rejected
+ * with "configured plugin path must be a directory" and a bare exported function with a PluginModule.LoadError), so
+ * it gets the directory; OpenCode 1 gets the file it has always used.
+ */
+async function opencodePluginSpec(): Promise<string> {
+  const major = await cliMajor('opencode').catch(() => null);
+  return major !== null && major >= 2 ? pathToFileURL(OPENCODE_PLUGIN_V2_DIR).href : pathToFileURL(path.join(BIN_DIR, 'opencode-plugin.mjs')).href;
 }
 
 /** A command line for Claude Code's shell (Git Bash on Windows): forward slashes, quoted. */
@@ -637,6 +653,9 @@ export function startCliSession(opts: SessionOptions, callbacks: SessionCallback
     prompt += `\n\nWhen you are done, end your final message with your report as one JSON object in a \`\`\`json block, matching this JSON schema:\n${JSON.stringify(opts.outputSchema)}`;
   }
   let files: { settings: string; mcp: string | null; system: string };
+  /** The office's MCP endpoint for this session's token: the CEO's tools. Claude Code reads it from its MCP config
+   *  file; OpenCode gets it in its injected config. */
+  let officeMcpUrl: string | undefined;
   try {
     writeHelpers();
     fs.mkdirSync(dir, { recursive: true });
@@ -646,7 +665,10 @@ export function startCliSession(opts: SessionOptions, callbacks: SessionCallback
     };
     const servers: Record<string, unknown> = {};
     if (browser) servers.playwright = browser;
-    if (opts.office) servers.office = { type: 'http', url: `${officeUrl}/api/mcp/${token}` };
+    if (opts.office) {
+      officeMcpUrl = `${officeUrl}/api/mcp/${token}`;
+      servers.office = { type: 'http', url: officeMcpUrl };
+    }
     files = { settings: path.join(dir, 'settings.json'), mcp: Object.keys(servers).length ? path.join(dir, 'mcp.json') : null, system: path.join(dir, 'instructions.md') };
     fs.writeFileSync(files.settings, JSON.stringify(settings, null, 2));
     if (files.mcp) fs.writeFileSync(files.mcp, JSON.stringify({ mcpServers: servers }, null, 2));
@@ -663,23 +685,6 @@ export function startCliSession(opts: SessionOptions, callbacks: SessionCallback
   officePrompts.push(prompt.trim()); // as given: a long one is a pointer to its file
   launched.push(prompt.trim());
 
-  const launch = launchArgs(cli, {
-    prompt,
-    systemAppend: opts.systemAppend,
-    model: opts.model,
-    effort: opts.effort,
-    resumeId: opts.resumeSessionId,
-    sessionId,
-    name: opts.label ?? 'cubefarm',
-    role: opts.role,
-    additionalDirectories: opts.additionalDirectories,
-    files,
-    notify: { script: path.join(BIN_DIR, 'notify.cjs'), url: hookUrl },
-    codexHook: path.join(BIN_DIR, 'codex-hook.cjs'),
-    plugin: pathToFileURL(path.join(BIN_DIR, 'opencode-plugin.mjs')).href,
-    browser,
-  });
-
   // Each agent must be a clean instance on the account its CLI is logged into: no API keys (they would switch Claude
   // Code's billing to the API) and nothing inherited from a Claude Code session the office itself was started from.
   const env: Record<string, string> = {};
@@ -689,14 +694,51 @@ export function startCliSession(opts: SessionOptions, callbacks: SessionCallback
     if (/^(NO_COLOR|FORCE_COLOR|TERM_PROGRAM|TERM_PROGRAM_VERSION|CODEX_THREAD_ID|OPENCODE_CONFIG_CONTENT)$/i.test(k)) continue;
     env[k] = v;
   }
-  Object.assign(env, { TERM: 'xterm-256color', COLORTERM: 'truecolor' }, launch.env);
+
+  /**
+   * The CLI's command line. OpenCode's plugin shape differs between its majors, so its plugin spec is chosen by the
+   * installed version (OpenCode 2 wants a directory; OpenCode 1 a file).
+   */
+  const buildLaunch = async () =>
+    launchArgs(cli, {
+      prompt,
+      systemAppend: opts.systemAppend,
+      model: opts.model,
+      effort: opts.effort,
+      resumeId: opts.resumeSessionId,
+      sessionId,
+      name: opts.label ?? 'cubefarm',
+      role: opts.role,
+      additionalDirectories: opts.additionalDirectories,
+      files,
+      notify: { script: path.join(BIN_DIR, 'notify.cjs'), url: hookUrl },
+      codexHook: path.join(BIN_DIR, 'codex-hook.cjs'),
+      plugin: cli === 'opencode' ? await opencodePluginSpec() : pathToFileURL(path.join(BIN_DIR, 'opencode-plugin.mjs')).href,
+      browser,
+      officeUrl: officeMcpUrl,
+    });
 
   if (cli === 'claude' && opts.resumeSessionId) cb.sessionId(sessionId);
+  // If a different coding agent last used this terminal, wipe its screen first: the old CLI's output (and its
+  // alternate buffer) would otherwise linger under the new one.
+  const prior = term.snapshot();
+  let at = -1;
+  let lastLabel = '';
+  for (const c of CLIS) {
+    const i = prior.lastIndexOf(`── ${c.label}`);
+    if (i > at) {
+      at = i;
+      lastLabel = c.label;
+    }
+  }
+  if (lastLabel && lastLabel !== label) term.clear();
   term.note(`── ${label}${opts.label ? ` · ${opts.label}` : ''} ──`);
   const resumeId = cli === 'claude' ? sessionId : (opts.resumeSessionId ?? null);
   const l: LiveCli = { agentId: opts.agentId ?? '', cli, term, proc: null, token, dir, resumeId, statusLine, shots: new Set(), session: { hook, exited } };
-  const begin = () => {
+  const begin = async () => {
     if (done) return; // stopped while its thread was being unarchived
+    const launch = await buildLaunch();
+    Object.assign(env, { TERM: 'xterm-256color', COLORTERM: 'truecolor' }, launch.env);
     let p: Pty;
     try {
       p = spawnPty(cmd.file, [...cmd.args, ...launch.args], { cols: term.cols, rows: term.rows, cwd: opts.cwd, env }, metaOf(l));
@@ -744,7 +786,7 @@ export function startCliSession(opts: SessionOptions, callbacks: SessionCallback
   };
   // Codex won't resume a thread the office archived (see codexThread): it's unarchived first.
   if (cli === 'codex' && opts.resumeSessionId) void codexThread('unarchive', opts.resumeSessionId).then(begin);
-  else begin();
+  else void begin();
 
   return handle;
 }

@@ -18,7 +18,7 @@ export const cliName = (clis: CliView[], id: AgentCli) => clis.find((c) => c.id 
 
 /** The coding agent a worker runs: their own pick in Real terminals; the Agent SDK is Claude Code for everyone. */
 export const workerCli = (a: Pick<Agent, 'cli' | 'role'>, settings: Pick<SwarmSettings, 'runtime' | 'defaultCli'>): AgentCli =>
-  a.role === 'ceo' || settings.runtime !== 'terminal' ? 'claude' : a.cli || settings.defaultCli;
+  settings.runtime !== 'terminal' ? 'claude' : a.cli || settings.defaultCli;
 
 type Patch = Parameters<typeof api.updateAgent>[1];
 
@@ -79,8 +79,11 @@ export function CliSelect({ agent, id, style }: FieldProps) {
 
 export function ModelInput({ agent, id, className = 'inline', style }: FieldProps) {
   const settings = useStore((s) => s.settings);
+  const clis = useStore((s) => s.clis);
   const listId = useId();
   const cli = workerCli(agent, settings);
+  // Prefer the CLI's own models (OpenCode reports them via `opencode models`); fall back to built-in suggestions.
+  const suggestions = clis.find((c) => c.id === cli)?.models ?? modelSuggestions(cli);
   return (
     <>
       <input
@@ -90,13 +93,13 @@ export function ModelInput({ agent, id, className = 'inline', style }: FieldProp
         style={style}
         list={listId}
         defaultValue={agent.model}
-        placeholder={(agent.role === 'ceo' ? CLAUDE_MODELS[0] : effectiveModel('', cli, settings, CLAUDE_MODELS[0])) || 'agent default'}
+        placeholder={effectiveModel('', cli, settings, CLAUDE_MODELS[0]) || 'agent default'}
         title={agent.role === 'ceo' ? "The CEO's model" : "Their model ('' = the default for their coding agent)"}
         aria-label={id ? undefined : 'Model'}
         onBlur={(e) => e.target.value !== agent.model && void save(agent.id, { model: e.target.value })}
       />
       <datalist id={listId}>
-        {modelSuggestions(cli).map((m) => (
+        {suggestions.map((m) => (
           <option key={m} value={m} />
         ))}
       </datalist>
@@ -105,9 +108,19 @@ export function ModelInput({ agent, id, className = 'inline', style }: FieldProp
 }
 
 export function EffortSelect({ agent, id, style }: FieldProps) {
-  const defaultEffort = useStore((s) => s.settings.defaultEffort);
+  const settings = useStore((s) => s.settings);
+  const defaultEffort = settings.defaultEffort;
+  // On OpenCode the reasoning level picks the model variant (`provider/model#effort`).
+  const opencode = settings.runtime === 'terminal' && (agent.cli || settings.defaultCli) === 'opencode';
   return (
-    <select id={id} value={agent.effort} title={agent.role === 'ceo' ? "The CEO's effort" : 'Their effort'} aria-label={id ? undefined : 'Effort'} style={style} onChange={(e) => void save(agent.id, { effort: e.target.value })}>
+    <select
+      id={id}
+      value={agent.effort}
+      title={opencode ? 'Reasoning level: sets the OpenCode model variant (provider/model#effort)' : agent.role === 'ceo' ? "The CEO's effort" : 'Their effort'}
+      aria-label={id ? undefined : 'Effort'}
+      style={style}
+      onChange={(e) => void save(agent.id, { effort: e.target.value })}
+    >
       {(agent.role !== 'ceo' || !agent.effort) && <option value="">default ({defaultEffort})</option>}
       {EFFORTS.map((x) => (
         <option key={x} value={x}>
@@ -371,7 +384,7 @@ export function PromptPreview({ agent }: { agent: Agent }) {
   );
 }
 
-/** The ⚙️ Setup section of an agent's panel. The CEO always runs Claude Code, so they only get model and effort. */
+/** The ⚙️ Setup section of an agent's panel. The CEO picks their coding agent, model and effort too. */
 export function AgentSetup({ agent }: { agent: Agent }) {
   const terminal = useStore((s) => s.settings.runtime === 'terminal');
   const id = useId();
@@ -399,7 +412,7 @@ export function AgentSetup({ agent }: { agent: Agent }) {
             <LookSelect agent={agent} id={`${id}-look`} />
           </label>
         )}
-        {!ceo && terminal && (
+        {terminal && (
           <label className="field" htmlFor={`${id}-cli`}>
             <span>Coding agent</span>
             <CliSelect agent={agent} id={`${id}-cli`} />

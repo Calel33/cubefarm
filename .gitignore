@@ -5,3 +5,6 @@ dist-server
 *.log
 playwright-report
 test-results
+
+# Cloudflare tunnel local credentials — defense in depth (Quick Tunnels need none)
+/cloudflared/
